@@ -1,0 +1,44 @@
+.idea/
+.Ds_Store
+.DS_Store
+bin/
+dist/
+.release-env
+go.work
+go.work.sum
+.devenv/
+.envrc
+result/
+coverage.txt
+musicfox
+tapefox
+azichrome-tui
+__debug*
+.slim/
+.playwright-mcp/
+
+# Local credentials, browser sessions and development artifacts are never published.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+*.db
+*.sqlite
+*.sqlite3
+Cookies
+Cookies-journal
+Login Data
+Login Data-journal
+Local State
+chrome/
+chrome-profile/
+.codegraph/
+.opencode/
+.planning/
+.rules/
+.vscode/
+AGENTS.md
+AGENTS.override.md

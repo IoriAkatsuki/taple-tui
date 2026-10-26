@@ -1,0 +1,5 @@
+# Optional settings. The application never generates or rewrites this file.
+[main]
+motion = "full"       # full / subtle / off
+blockGlyphs = "auto"  # auto / half / quadrant / sextant / octant / braille
+frameRate = 60        # 1..240

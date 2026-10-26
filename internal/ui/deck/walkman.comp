@@ -1,0 +1,590 @@
+#version 450
+// Mirrors geom.go, face.go, shade.go and walkman_mechanics.go. CPU remains
+// the reference implementation; parity tests compare every fitted subpixel.
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) readonly buffer Input { float p[]; };
+layout(std430, binding = 1) writeonly buffer Output { vec4 pixels[]; };
+const float PI = 3.141592653589793, INF = 1e30;
+const vec3 size = vec3(.74, 1.55, 2.1);
+const vec3 lamp = normalize(vec3(-.45, -.7, -.55));
+vec3 pv(int i) { return vec3(p[i], p[i + 1], p[i + 2]); }
+mat3 pm(int i) { return transpose(mat3(pv(i), pv(i + 3), pv(i + 6))); }
+mat3 rot, crot;
+float restNL;
+struct Hit {
+  float t;
+  vec3 point;
+  vec3 normal;
+  int side;
+};
+struct Mat {
+  vec3 bg, hero, shell, label, ink, stripe, glass, tape, hub, hole, clampColor,
+      screw;
+  float translucent;
+  int pattern;
+};
+struct Face {
+  vec3 color, normal;
+  float gloss;
+  int kind;
+};
+// Face kinds: shell=1, window=2, all other opaque details=3.
+Face faceAt(vec3 c, vec3 n, float g, int k) { return Face(c, n, g, k); }
+float copySign(float a, float b) { return b < 0 ? -abs(a) : abs(a); }
+bool slab(float o, float d, float lo, float hi, out float a, out float b) {
+  if (abs(d) < 1e-12) {
+    a = -INF;
+    b = INF;
+    return o >= lo && o <= hi;
+  }
+  a = (lo - o) / d;
+  b = (hi - o) / d;
+  if (a > b) {
+    float c = a;
+    a = b;
+    b = c;
+  }
+  return true;
+}
+bool circle(vec2 o, vec2 d, vec2 c, float r, out float a, out float b) {
+  vec2 q = o - c;
+  float aa = dot(d, d), bb = dot(q, d), cc = dot(q, q) - r * r,
+        disc = bb * bb - aa * cc;
+  if (aa < 1e-12 || disc < 0)
+    return false;
+  a = (-bb - sqrt(disc)) / aa;
+  b = (-bb + sqrt(disc)) / aa;
+  return true;
+}
+bool shell(vec3 o, vec3 d, out Hit h) {
+  float z = 0;
+  int side = 0;
+  if (o.z < -4.5 && d.z > 0) {
+    z = -4.5;
+    side = 1;
+  } else if (o.z > 4.5 && d.z < 0) {
+    z = 4.5;
+    side = 2;
+  }
+  if (side != 0) {
+    float t = (z - o.z) / d.z;
+    vec3 q = o + t * d;
+    vec2 a = abs(q.xy);
+    if (a.x < 38 - 1e-6 && a.y < 24 - 1e-6 &&
+        !(a.x > 35 - 1e-6 && a.y > 21 - 1e-6)) {
+      h = Hit(t, q, vec3(0, 0, side == 1 ? -1 : 1), side);
+      return true;
+    }
+  }
+  float z0, z1, x0, x1, y0, y1;
+  if (!slab(o.z, d.z, -4.5, 4.5, z0, z1) || !slab(o.x, d.x, -38, 38, x0, x1) ||
+      !slab(o.y, d.y, -24, 24, y0, y1))
+    return false;
+  float t0 = max(x0, y0), t1 = min(x1, y1);
+  if (t0 > t1)
+    return false;
+  vec2 normal =
+      x0 > y0 ? vec2(-copySign(1, d.x), 0) : vec2(0, -copySign(1, d.y));
+  vec2 q = o.xy + t0 * d.xy;
+  if (abs(q.x) > 35 && abs(q.y) > 21) {
+    vec2 c = vec2(copySign(35, q.x), copySign(21, q.y));
+    float a, b;
+    if (!circle(o.xy, d.xy, c, 3, a, b))
+      return false;
+    t0 = a;
+    normal = (o.xy + a * d.xy - c) / 3;
+  }
+  q = o.xy + t1 * d.xy;
+  if (abs(q.x) > 35 && abs(q.y) > 21) {
+    float a, b;
+    if (!circle(o.xy, d.xy, vec2(copySign(35, q.x), copySign(21, q.y)), 3, a,
+                b))
+      return false;
+    t1 = b;
+  }
+  float enter = max(z0, t0), leave = min(z1, t1);
+  if (t0 > t1 || enter > leave || leave <= 0)
+    return false;
+  side = z0 >= t0 ? (d.z > 0 ? 1 : 2) : 3;
+  h = Hit(enter, o + enter * d,
+          side == 3 ? vec3(normal, 0) : vec3(0, 0, side == 1 ? -1 : 1), side);
+  return true;
+}
+bool boxHit(vec3 o, vec3 d, vec3 lo, vec3 hi, out Hit h) {
+  float enter = -INF, leave = INF;
+  vec3 n = vec3(0);
+  for (int i = 0; i < 3; i++) {
+    float a, b;
+    if (!slab(o[i], d[i], lo[i], hi[i], a, b))
+      return false;
+    if (a > enter) {
+      enter = a;
+      n = vec3(0);
+      n[i] = -copySign(1, d[i]);
+    }
+    leave = min(leave, b);
+  }
+  if (enter <= 0 || enter > leave)
+    return false;
+  h = Hit(enter, o + enter * d, n, 3);
+  return true;
+}
+float roundSD(vec2 uv, vec2 wh, float r) {
+  vec2 q = abs(uv - wh / 2) - (wh / 2 - r);
+  return length(max(q, 0)) + min(max(q.x, q.y), 0) - r;
+}
+float windowDist(vec2 uv) { return length(uv - vec2(clamp(uv.x, 22, 54), 24)); }
+vec3 light(vec3 albedo, vec3 n, vec3 view, float gloss, mat3 rotation,
+           vec3 hero) {
+  n = rotation * n;
+  vec3 c = albedo * (.35 + .65 * max(dot(n, lamp), 0) / restNL);
+  if (gloss > 0) {
+    float x = max(dot(n, normalize(lamp + view)), 0), x3 = x * x * x,
+          x6 = x3 * x3, x12 = x6 * x6;
+    c = mix(c, hero, min(x12 * x12 * .14 * gloss, .25));
+  }
+  return c;
+}
+bool nearAngle(float a, float target, float step, float tol) {
+  float d = mod(a - target, step);
+  return d < tol || step - d < tol;
+}
+vec3 reel(vec2 xy, Mat m, out bool glass) {
+  glass = false;
+  for (int i = 0; i < 2; i++) {
+    vec2 q = xy - vec2(i == 0 ? -16 : 16, 0);
+    float r = length(q), radius = p[40 + i];
+    if (r >= radius)
+      continue;
+    float a = atan(q.y, q.x), rel = a - p[42 + i], blur = p[44];
+    if (r < 1.6)
+      return m.hole;
+    if (r < 3.2) {
+      vec3 teeth = m.hub * .92, blurred = mix(m.hole, teeth, .37);
+      return mix(nearAngle(rel, 0, PI / 3, 11 * PI / 180) ? teeth : m.hole,
+                 blurred, blur);
+    }
+    if (r < 6.5) {
+      vec3 c = m.hub;
+      if (r > 5.7 || r < 3.8)
+        c *= .87;
+      if (r > 4.2 && r < 5.9 && nearAngle(rel, PI, 2 * PI, .32))
+        return mix(c, m.clampColor, 1 - .9 * blur);
+      return c;
+    }
+    vec3 c = m.tape * (1 + .05 * sin(r * 2.6));
+    float dd = mod(abs(a + 2.2), 2 * PI), s = min(dd, 2 * PI - dd);
+    if (s < .55)
+      c = mix(c, m.hub, .12 * (1 - s / .55));
+    if (r > radius - .8)
+      c *= 1.12;
+    return c;
+  }
+  if (abs(xy.y - 7.4) < .55 && abs(xy.x) < 16)
+    return m.tape * 1.1;
+  glass = true;
+  return m.glass;
+}
+vec3 interior(vec2 xy, Mat m) {
+  vec2 uv = xy + vec2(38, 24);
+  for (int i = 0; i < 2; i++) {
+    float r = length(uv - vec2(i == 0 ? 10 : 66, 40));
+    if (r < 3.2)
+      return r < 1 ? m.hole : m.hub * (.8 + .2 * r / 3.2);
+  }
+  if (abs(uv.y - 37) < .6)
+    return m.shell * .7;
+  bool glass;
+  vec3 c = reel(xy, m, glass);
+  if (!glass)
+    return c;
+  for (int i = 0; i < 2; i++) {
+    vec2 q = xy - vec2(i == 0 ? -16 : 16, 0);
+    if (length(q) < 15.8) {
+      vec3 plate = mix(m.glass, m.hub, .18);
+      return nearAngle(atan(q.y, q.x) - p[42 + i], 0, 2 * PI / 3, .22)
+                 ? mix(m.glass, plate, p[44])
+                 : plate;
+    }
+  }
+  return c;
+}
+const int digits[70] =
+    int[](14, 17, 19, 21, 25, 17, 14, 4, 12, 4, 4, 4, 4, 14, 14, 17, 1, 2, 4, 8,
+          31, 30, 1, 1, 14, 1, 1, 30, 2, 6, 10, 18, 31, 2, 2, 31, 16, 16, 30, 1,
+          1, 30, 14, 16, 16, 30, 17, 17, 14, 31, 1, 2, 4, 8, 8, 8, 14, 17, 17,
+          14, 17, 17, 14, 14, 17, 17, 15, 1, 1, 14);
+bool trackInk(vec2 uv) {
+  vec2 q = uv - vec2(56, 4.5);
+  int idx = int(floor(q.x / 7)), col = int(floor(q.x - float(idx) * 7)),
+      row = int(floor(q.y / (5.5 / 7)));
+  if (idx < 0 || idx > 1 || col < 0 || col >= 5 || row < 0 || row >= 7)
+    return false;
+  int number = (int(p[47]) % 100 + 100) % 100,
+      digit = idx == 0 ? number / 10 : number % 10;
+  return (digits[digit * 7 + row] & (1 << (4 - col))) != 0;
+}
+Face labelAt(vec2 uv, Mat m, int side, float detail) {
+  float u = uv.x, v = uv.y;
+  vec3 c = m.label;
+  if (m.pattern != 0) {
+    if (detail >= .5) {
+      if (m.pattern == 1 && (abs(u - 18 + (v - 14) * 1.4) < 1.8 ||
+                             abs(u - 26 + (v - 14) * 1.4) < 1.1))
+        c = m.ink;
+      if (m.pattern == 2) {
+        if (v >= 10 && v <= 15)
+          c = m.ink;
+        else if (v < 10 && (mod(u, 6) < .7 || mod(v, 2.5) < .7))
+          c = m.shell;
+      }
+      if (m.pattern == 3) {
+        if (v >= 10.5 && v <= 13.5)
+          c = m.shell;
+        else if (u >= 56 && u <= 68 && v >= 4.5 && v <= 10 && trackInk(uv))
+          c = m.ink;
+      }
+      if (m.pattern == 4) {
+        if (v >= 11 && v < 11.9)
+          c = vec3(255, 59, 92);
+        else if (v >= 11.9 && v < 12.8)
+          c = vec3(255, 210, 63);
+        else if (v >= 12.8 && v <= 13.7)
+          c = m.ink;
+      }
+      if (m.pattern == 5 && v >= 6 && v <= 14 &&
+          !(v >= 9.2 && v <= 9.8 || v >= 11.2 && v <= 11.8 ||
+            v >= 13 && v <= 13.5)) {
+        float t = (v - 6) / 8;
+        c = t > .5 ? mix(vec3(255, 107, 0), m.stripe, (t - .5) * 2)
+                   : mix(m.ink, vec3(255, 107, 0), t * 2);
+      }
+    }
+  } else {
+    if (v >= 11.6 && v < 11.6 + clamp(1.1 / max(detail, .01), 1.5, 3.6) &&
+        u >= 6 && u <= 70)
+      c = m.stripe;
+    else if (detail >= .45) {
+      vec2 q = (uv - vec2(6.6, 3.9)) / 1.05;
+      if (q.x >= 0 && q.y >= 0 && q.x < 5 && q.y < 7) {
+        int row = int(q.y);
+        int a[7] = int[](14, 17, 17, 31, 17, 17, 17);
+        int b[7] = int[](30, 17, 17, 30, 17, 17, 30);
+        if (((side == 0 ? a[row] : b[row]) & (1 << (4 - int(q.x)))) != 0)
+          c = m.ink;
+      } else if (detail >= .5) {
+        if (u >= 15 && u <= 69) {
+          for (int i = 0; i < 3; i++) {
+            float lv = 5 + float(i) * 2.5;
+            if (v >= lv && v < lv + .9)
+              c = m.ink;
+          }
+        }
+        if (v >= 33.2 && v < 34.4) {
+          for (int i = 0; i < 4; i++) {
+            float bu = 59 + 2.6 * float(i);
+            if (u >= bu && u < bu + 1.2)
+              c = m.ink;
+          }
+        }
+      }
+    }
+  }
+  return faceAt(c, vec3(0, 0, 1), .1, 3);
+}
+Face face(vec2 uv, Mat m, int side, float detail) {
+  float u = uv.x, v = uv.y;
+  if ((u < 2 || u > 74 || v < 2 || v > 46) &&
+      roundSD(uv, vec2(76, 48), 3) > -1) {
+    float nx = roundSD(uv + vec2(.05, 0), vec2(76, 48), 3) -
+               roundSD(uv - vec2(.05, 0), vec2(76, 48), 3);
+    float ny = roundSD(uv + vec2(0, .05), vec2(76, 48), 3) -
+               roundSD(uv - vec2(0, .05), vec2(76, 48), 3);
+    vec2 n = length(vec2(nx, ny)) == 0 ? vec2(0, -1) : normalize(vec2(nx, ny));
+    return faceAt(m.shell, normalize(vec3(n * .7, .7)), .6, 3);
+  }
+  for (int i = 0; i < 2; i++) {
+    vec2 d = uv - vec2(i == 0 ? 3.6 : 72.4, 44.4);
+    if (dot(d, d) < 1.3)
+      return faceAt(m.screw, normalize(vec3(d, 1.2)), .8, 3);
+  }
+  float dw = windowDist(uv);
+  if (dw <= 8.5)
+    return faceAt(vec3(0), vec3(0), 0, 2);
+  if (dw <= 9.4) {
+    vec2 n = (uv - vec2(clamp(u, 22, 54), 24)) / dw;
+    return faceAt(m.shell * .9, normalize(vec3(-n * .5, .85)), .5, 3);
+  }
+  bool label = roundSD(uv - vec2(4, 3), vec2(68, 32), 1.5) <= 0;
+  if (m.pattern == 4)
+    label = u >= 14 && u <= 62 && v >= 4 && v <= 14;
+  if (label)
+    return labelAt(uv, m, side, detail);
+  if (v >= 37) {
+    float spread = (v - 37) * 4 / 11;
+    if (u >= 20 - spread && u <= 56 + spread) {
+      if (length(uv - vec2(26.5, 44)) < 1.4 ||
+          length(uv - vec2(49.5, 44)) < 1.4 || u >= 35 && u <= 41 && v >= 44.5)
+        return faceAt(m.hole, vec3(0, 0, 1), 0, 3);
+      if (v < 38)
+        return faceAt(m.shell, vec3(0, -.6, .8), .5, 3);
+      return faceAt(m.shell * 1.05, vec3(0, 0, 1), .35, 3);
+    }
+  }
+  return faceAt(m.shell, vec3(0, 0, 1), .35, 1);
+}
+vec3 cassette(vec3 o, vec3 d, vec3 view, Hit h, Mat m) {
+  if (h.side == 3) {
+    vec3 c = m.shell;
+    if (abs(h.point.z) < .3)
+      c *= .8;
+    return light(c, h.normal, view, .3, crot, m.hero);
+  }
+  int side = h.side == 2 ? 1 : 0;
+  float dir = side == 0 ? 1 : -1, z = side == 0 ? -4.5 : 4.5;
+  vec2 uv = vec2(side == 0 ? h.point.x + 38 : 38 - h.point.x, h.point.y + 24);
+  Face f = face(uv, m, side, p[39]);
+  if (f.kind == 2) {
+    vec3 q = o + d * ((z + dir * 3 - o.z) / d.z);
+    vec2 v = q.xy + vec2(38, 24);
+    vec3 c;
+    if (windowDist(v) > 8.5) {
+      vec2 n = v - vec2(clamp(v.x, 22, 54), 24);
+      n = -normalize(n);
+      c = light(m.shell * .95, vec3(n, 0), view, .2, crot, m.hero);
+    } else {
+      bool glass;
+      c = reel(q.xy, m, glass);
+      vec3 l = transpose(crot) * lamp;
+      if (abs(l.z) > 1e-6) {
+        vec3 sh = q + l * ((z - q.z) / l.z);
+        float over = windowDist(sh.xy + vec2(38, 24)) - 8.5;
+        if (over > 0)
+          c *= 1 - .42 * min(over / .8, 1);
+      }
+    }
+    vec3 n = crot * vec3(0, 0, -dir), r = reflect(-view, n);
+    float az = atan(r.x, -r.z), reflectionQ = (az - .6) / .07,
+          band = exp(-reflectionQ * reflectionQ) * smoothstep(-.9, -.2, -r.y);
+    return mix(mix(c, m.glass, .12), m.hero, .2 * band);
+  }
+  vec3 n = side == 0 ? vec3(f.normal.xy, -f.normal.z)
+                     : vec3(-f.normal.x, f.normal.yz);
+  vec3 c = light(f.color, n, view, f.gloss, crot, m.hero);
+  if (f.kind == 1 && m.translucent > 0) {
+    vec3 q = o + d * ((z + dir * 3 - o.z) / d.z);
+    c = mix(c, interior(q.xy, m), m.translucent);
+  }
+  return c;
+}
+bool arrow(vec2 uv) {
+  float dx = abs(uv.x - 44.5), v = uv.y;
+  if (v >= 23 && v <= 27.8) {
+    float width = (v - 23) * .52;
+    return dx <= width + .42 && (dx >= width - .48 || v > 27);
+  }
+  return v > 27.8 && v <= 33.8 &&
+         (dx >= .35 && dx <= 1.05 || v >= 33 && dx <= 1.05);
+}
+vec3 body(Hit h) {
+  vec3 blue = vec3(34, 70, 123), silver = vec3(156, 168, 186),
+       dark = vec3(14, 18, 32), bright = vec3(206, 218, 234);
+  vec2 uv = h.point.xy + vec2(38, 24);
+  float u = uv.x, v = uv.y;
+  if (h.side == 3) {
+    if (h.normal.y < -.5) {
+      if (u >= 56)
+        return silver * .84;
+      for (int i = 0; i < 2; i++) {
+        float r = length(vec2(u - (i == 0 ? 32 : 42), h.point.z * 1.2));
+        if (r < 1.3)
+          return dark;
+        if (r < 2.6)
+          return vec3(42, 208, 116);
+        if (r < 3.4)
+          return bright;
+      }
+      return blue * .82;
+    }
+    if (h.normal.x > .5) {
+      if (v >= 26 && v <= 41 && abs(h.point.z) < 2.2)
+        return v >= 31 && v <= 35 ? vec3(168, 180, 198) : dark;
+      return vec3(106, 118, 136);
+    }
+    if (h.normal.x < -.5 && v >= 18 && v <= 38)
+      return v <= 19.5 || v >= 36.5 ? blue * .92 : dark;
+    if (v >= 7.2 && v <= 8.2)
+      return dark;
+    return blue * .68;
+  }
+  if (h.side == 2)
+    return blue * .72;
+  if (u >= 56) {
+    if (u < 56.8)
+      return dark;
+    if (u < 57.5)
+      return bright;
+    if (u > 74.8)
+      return silver * .76;
+    if (length(uv - vec2(63, 38.5)) < 1.35)
+      return dark;
+    return silver;
+  }
+  if (u < 1.2 || v < 1.2 || v > 46.8)
+    return mix(blue, silver, .24);
+  if (v >= 7.2 && v < 8.2)
+    return v < 7.7 ? dark : mix(blue, silver, .28);
+  return blue;
+}
+vec4 sampleScene(vec3 o, vec3 d, vec3 view, Mat m) {
+  vec3 c = m.bg;
+  float nearest = INF;
+  vec2 front = vec2(0);
+  bool hitFront = false;
+  Hit h;
+  bool only = p[37] != 0;
+  int keys = int(p[36]);
+  if (!only && shell(o / size, d / size, h)) {
+    vec2 uv = h.point.xy + vec2(38, 24);
+    front = uv;
+    hitFront = h.side == 1;
+    if (hitFront && uv.x > 6 && uv.x < 70 && uv.y > 18 && uv.y < 38) {
+      nearest = (2.7 - o.z) / d.z;
+      vec2 wp = (uv - vec2(23, 28)) * size.xy / .42;
+      vec2 rp = vec2(-wp.y, wp.x);
+      c = vec3(19, 16, 29);
+      for (int i = 0; i < 2; i++) {
+        vec2 q = rp - vec2(i == 0 ? -16 : 16, 0);
+        float r = length(q);
+        if (r < 3.2 * 1.15 &&
+            (r < 1.6 * 1.2 || nearAngle(atan(q.y, q.x), 0, PI / 3, .28)))
+          c = vec3(184, 188, 208);
+      }
+    } else {
+      nearest = h.t;
+      c = light(body(h), normalize(h.normal / size), view, .45, rot, m.hero);
+    }
+  }
+  if (p[34] >= 0 && (only || p[34] > 0 || p[35] > 0 ||
+                     hitFront && front.x > 10 && front.x < 36 &&
+                         front.y > 18.8 && front.y < 37.2)) {
+    vec3 pos = pv(30);
+    if (!only && p[34] == 0 && p[35] == 0 && abs(d.z) > 1e-6)
+      pos += vec3(d.xy / d.z * (3 * p[33] + .05), 0);
+    vec3 co = transpose(crot) * (rot * (o - pos)) / p[33],
+         cd = transpose(crot) * (rot * d) / p[33];
+    if (shell(co, cd, h) && h.t < nearest) {
+      nearest = h.t;
+      float cover = p[38] > 0
+                        ? smoothstep((.5 - min(p[38], 1)) * 49 - .5,
+                                     (.5 - min(p[38], 1)) * 49 + .5, h.point.y)
+                        : 0;
+      if (cover < 1)
+        c = cassette(co, cd, view, h, m);
+      if (cover > 0) {
+        Mat neutral =
+            Mat(m.bg, vec3(188, 205, 214), vec3(38, 55, 69), vec3(55, 72, 84),
+                vec3(188, 205, 214), vec3(72, 109, 122), vec3(16, 29, 39),
+                vec3(25, 38, 47), vec3(148, 168, 180), vec3(9, 17, 25),
+                vec3(72, 109, 122), vec3(118, 139, 153), 0, 0);
+        vec3 nc = cassette(co, cd, view, h, neutral);
+        c = cover == 1 ? nc : mix(c, nc, cover);
+      }
+    }
+  }
+  if (only)
+    return vec4(c, nearest < INF ? 1 : 0);
+  for (int i = 0; i < 8; i++) {
+    vec3 lo, hi;
+    if (i < 5) {
+      float x = (-24 + float(i) * 12) * size.x, y = -24 * size.y - 1.6;
+      if ((keys & (1 << i)) != 0)
+        y += 1.2;
+      lo = vec3(x - 3.1, y, -3.8);
+      hi = vec3(x + 3.1, y + 2.8, 3.8);
+    } else {
+      int j = i - 5;
+      float v0 = j == 0   ? 6.5
+                 : j == 1 ? 12.2
+                          : 18.2,
+            v1 = j == 0   ? 11
+                 : j == 1 ? 16.8
+                          : 27;
+      lo = vec3(37.8 * size.x, (v0 - 24) * size.y, -3.4);
+      hi = vec3((41.2 - (j == 2 && (keys & 2) != 0 ? 1 : 0)) * size.x,
+                (v1 - 24) * size.y, 3.4);
+    }
+    if (boxHit(o, d, lo, hi, h) && h.t < nearest) {
+      nearest = h.t;
+      if (i == 0)
+        c = h.normal.y < -.5   ? vec3(255, 168, 28)
+            : h.normal.y > -.5 ? vec3(198, 96, 8)
+                               : vec3(248, 138, 14);
+      else if (i < 5)
+        c = (keys & (1 << i)) != 0
+                ? vec3(255, 43, 214)
+                : vec3(148, 160, 178) * (h.normal.y > -.5 ? .65 : 1);
+      else {
+        c = vec3(142, 154, 172);
+        if (h.normal.y < -.5)
+          c = vec3(186, 198, 214);
+        else if (h.normal.x > .5)
+          c = int(abs(h.point.y) * 1.8) % 2 == 0 ? vec3(112, 124, 142)
+                                                 : vec3(164, 176, 194);
+      }
+      c = light(c, h.normal, view, .35, rot, m.hero);
+    }
+  }
+  mat3 door = pm(84);
+  vec3 hinge = pv(93), oo = transpose(door) * (o - hinge),
+       dd = transpose(door) * d;
+  if (abs(dd.z) >= 1e-9) {
+    float t = -oo.z / dd.z;
+    vec3 q = oo + t * dd;
+    vec2 uv = q.xy / size.xy + vec2(70, 24);
+    float u = uv.x, v = uv.y;
+    if (t > 0 && t <= nearest && u >= 6 && u <= 70 && v >= 18 && v <= 38) {
+      vec3 n = door * vec3(0, 0, -1);
+      if (u > 10 && u < 36 && v > 18.8 && v < 37.2) {
+        c = mix(c, vec3(6, 34, 42), .35);
+        if (min(min(u - 10, 36 - u), min(v - 18.8, 37.2 - v)) < .45)
+          c = mix(c, vec3(0, 229, 255), (keys & 2) != 0 ? .6 : .24);
+      } else if (u >= 8.8 && u <= 37.2 && v >= 18 && v <= 38) {
+        c = min(min(u - 8.8, 37.2 - u), min(v - 18, 38 - v)) < .5
+                ? vec3(36, 44, 62)
+                : vec3(16, 20, 32);
+        c = light(c, n, view, .4, rot, m.hero);
+      } else if (u >= 56) {
+        c = u < 56.8                          ? vec3(14, 18, 32)
+            : u < 57.5                        ? vec3(204, 214, 228)
+            : length(uv - vec2(63, 36)) < 1.3 ? vec3(28, 36, 52)
+                                              : vec3(156, 168, 186);
+        c = light(c, n, view, .3, rot, m.hero);
+      } else {
+        c = arrow(uv) ? vec3(196, 212, 232)
+                      : vec3(34, 70, 123) * (u < 7 ? .86 : 1);
+        c = light(c, n, view, .35, rot, m.hero);
+      }
+      nearest = t;
+    }
+  }
+  return vec4(c, nearest < INF ? 1 : 0);
+}
+void main() {
+  uint i = gl_GlobalInvocationID.x;
+  uint w = uint(p[99]), h = uint(p[100]), gc = uint(p[2]), gr = uint(p[3]),
+       n = gc * gr;
+  if (i >= w * h * n)
+    return;
+  uint cell = i / n, sub = i % n;
+  float x = p[97] + float(cell % w) + (float(sub % gc) + .5) / float(gc),
+        y = (p[98] + float(cell / w) + (float(sub / gc) + .5) / float(gr)) *
+            p[4];
+  vec3 d = vec3((x - p[5]) / p[7], (y - p[6]) / p[7], 1);
+  rot = pm(12);
+  crot = pm(21);
+  restNL = p[96];
+  Mat m = Mat(pv(48), pv(51), pv(54), pv(57), pv(60), pv(63), pv(66), pv(69),
+              pv(72), pv(75), pv(78), pv(81), p[45], int(p[46]));
+  pixels[i] = sampleScene(pv(9), transpose(rot) * d * p[8], -normalize(d), m);
+}

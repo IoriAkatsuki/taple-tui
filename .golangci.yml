@@ -1,0 +1,60 @@
+version: "2"
+
+run:
+  concurrency: 8
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  build-tags: []
+  modules-download-mode: readonly
+  allow-parallel-runners: false
+  go: "1.22"
+
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+
+linters:
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - "-SA4006"
+        - "-SA1029"
+  enable:
+    - govet
+    - errcheck
+    - ineffassign
+    - staticcheck
+    - unused
+  exclusions:
+    generated: lax
+    paths:
+      - vendor$
+      - wire_gen\.go$
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/go-musicfox/go-musicfox)
+      custom-order: true
+  exclusions:
+    generated: lax
+    paths:
+      - vendor$
+      - wire_gen\.go$
+
+issues:
+  fix: false
+  new: true
+  whole-files: true

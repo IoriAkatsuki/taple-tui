@@ -1,0 +1,4 @@
+contact_links:
+  - name: go-musicfox itself / 原版 go-musicfox 的问题
+    url: https://github.com/go-musicfox/go-musicfox/issues
+    about: Issues that also happen in upstream go-musicfox belong there. / 原版 go-musicfox 也存在的问题请到上游反馈

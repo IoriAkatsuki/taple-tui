@@ -1,0 +1,189 @@
+name: Native platform builds
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version embedded in the binary and archive name
+        required: true
+        default: v1.1.0-rc.1
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-platform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CGO_ENABLED: "1"
+  GOTOOLCHAIN: local
+  VERSION: ${{ inputs.version || 'v1.1.0-rc.1' }}
+
+jobs:
+  build:
+    name: ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+            extension: ""
+          - runner: windows-2022
+            goos: windows
+            goarch: amd64
+            extension: .exe
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+            extension: ""
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            extension: ""
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.26.10"
+          cache: false
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc libvulkan-dev
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install vulkan-headers molten-vk
+          echo "CGO_CFLAGS=-I$(brew --prefix vulkan-headers)/include" >> "$GITHUB_ENV"
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        id: msys2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: UCRT64
+          update: true
+          cache: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-vulkan-headers
+      - name: Expose native Windows compiler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          "$env:MSYS2_ROOT\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "CC=gcc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Confirm native CGO target
+        env:
+          EXPECT_OS: ${{ matrix.goos }}
+          EXPECT_ARCH: ${{ matrix.goarch }}
+        run: |
+          test "$(go env GOOS)" = "$EXPECT_OS"
+          test "$(go env GOARCH)" = "$EXPECT_ARCH"
+          test "$(go env CGO_ENABLED)" = 1
+          go version
+      - name: Run all tests
+        run: go test ./...
+      - name: Diagnose failed macOS Vulkan startup
+        if: failure() && runner.os == 'macOS'
+        timeout-minutes: 4
+        run: |
+          diagnostic="$RUNNER_TEMP/taple-vulkan-diagnostic"
+          mkdir -p "$diagnostic"
+          brew list --versions vulkan-headers molten-vk
+          library="$(brew --prefix molten-vk)/lib/libMoltenVK.dylib"
+          file "$library"
+          otool -L "$library"
+          CGO_CFLAGS="$CGO_CFLAGS -O0 -g" go test -c -o "$diagnostic/deck.test" ./internal/ui/deck
+          xcrun lldb --batch --no-lldbinit \
+            -o 'settings set target.disable-aslr false' \
+            -o 'settings set target.env-vars MVK_CONFIG_LOG_LEVEL=4 MVK_CONFIG_TRACE_VULKAN_CALLS=4 DYLD_PRINT_LIBRARIES=1' \
+            -o 'breakpoint set -n abort' \
+            -o run \
+            -o 'thread backtrace all' \
+            -o 'image list' \
+            -o 'process kill' \
+            -k 'thread backtrace all' \
+            -k 'image list' \
+            -k 'process kill' \
+            -- "$diagnostic/deck.test" -test.run '^TestVulkanWalkmanMatchesCPU$' -test.v -test.timeout 60s
+      - name: Run concurrency regressions
+        run: go test -race ./internal/applemusic ./internal/ui
+      - name: Verify private Chrome pipe without login or music
+        env:
+          TAPEFOX_CHROME_SMOKE: "1"
+        run: go test -v ./internal/applemusic -run '^TestChromePrivatePipeSmoke$' -count=1
+      - name: Check physical GPU parity or report unavailable hardware
+        run: go test -v ./internal/ui/deck -run '^TestVulkanWalkmanMatchesCPU$' -count=1
+
+      - name: Build and install Linux or macOS binary
+        if: runner.os != 'Windows'
+        run: |
+          GOBIN="$RUNNER_TEMP/taple-tui-bin" hack/build.sh install
+          "$RUNNER_TEMP/taple-tui-bin/taple-tui" --version
+      - name: Build and install Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:GOBIN = Join-Path $env:RUNNER_TEMP "taple-tui-bin"
+          ./hack/build.ps1 install
+          if ($LASTEXITCODE -ne 0) { throw "Native build failed." }
+          & (Join-Path $env:GOBIN "taple-tui.exe") --version
+          if ($LASTEXITCODE -ne 0) { throw "Installed binary failed." }
+      - name: Package only the executable, readmes and license
+        run: go run ./hack/package -version "$VERSION"
+      - name: Verify checksum and start the extracted binary
+        env:
+          RELEASE_OS: ${{ matrix.goos }}
+          RELEASE_ARCH: ${{ matrix.goarch }}
+          EXE_EXTENSION: ${{ matrix.extension }}
+          MUSICFOX_ROOT: ${{ runner.temp }}/taple-tui-cli-smoke
+        run: |
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            (cd dist && shasum -a 256 -c -- *.sha256)
+          else
+            (cd dist && sha256sum -c -- *.sha256)
+          fi
+          unpack="$RUNNER_TEMP/taple-tui-unpack"
+          mkdir -p "$unpack"
+          if [[ "$RELEASE_OS" == windows ]]; then
+            unzip -q dist/*.zip -d "$unpack"
+          else
+            tar -xzf dist/*.tar.gz -C "$unpack"
+          fi
+          binary="$unpack/taple-tui_${VERSION}_${RELEASE_OS}_${RELEASE_ARCH}/taple-tui$EXE_EXTENSION"
+          actual="$("$binary" --version)"
+          printf '%s\n' "$actual"
+          [[ "$actual" == *"$VERSION"* ]]
+      - name: Verify Windows archive without build-tool DLL paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = Join-Path $env:RUNNER_TEMP "taple-tui-unpack/taple-tui_${env:VERSION}_windows_amd64/taple-tui.exe"
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          & $binary --version
+          if ($LASTEXITCODE -ne 0) { throw "Archive requires unavailable build-tool DLLs." }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: taple-tui-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/taple-tui_*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

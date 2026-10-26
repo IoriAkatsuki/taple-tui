@@ -1,0 +1,134 @@
+# taple-tui
+
+面向桌面的 Apple Music 终端播放器，使用块字符实时渲染蓝银 Walkman 磁带卡座（TPS-L2 比例）。支持 Linux，并提供 Windows 与 macOS 实验性适配。名称结合 **Tap**e（磁带）、App**le**（Apple Music）与 **TUI**。
+
+[English](README.en.md)
+
+公开仓库只发布版本源码快照、必要构建文件和演示资源，不包含开发历史、工程记录或本机登录数据。
+
+![装带入仓与自动近景](docs/assets/taple-insert.gif)
+
+## 功能与界面
+
+- 曲库搜索与浏览：支持歌曲、专辑、歌手搜索，支持歌手→专辑→歌曲层级浏览、分页加载、队列末尾追加与前 50 项跳播。
+- 个人资料库：支持歌单、专辑、歌曲、推荐分组与个人电台浏览及播放，支持按 `P` 顺序播放整张专辑或歌单，点播成功后开启原生自动续播。
+- 拟物容器与卡座：歌曲与队列使用双行磁带收纳架（单张半弹出、拿起显色），专辑使用黑胶唱片箱，歌单与歌手使用 3D 铰链档案夹；桌面背景随早、中、傍晚、夜间四个时段变化。
+- 同步歌词与电平：曲目切换后自动读取 TTML 歌词，聆听页提供滚筒滚动与行内进度粒子；底部提供双声道 dBFS 电平表与数码管计时器。
+
+| 磁带收纳架与取带换带 | 资料库（黑胶唱片箱 / 3D 档案夹 / 队列） |
+| :---: | :---: |
+| ![磁带收纳架](docs/assets/apple-music-storage.gif) | ![资料库与容器切换](docs/assets/taple-library-crates.gif) |
+
+| 聆听页（带盘运转 / 同步歌词 / VU 电平） | 切歌换带、设置与账户面板 |
+| :---: | :---: |
+| ![聆听页同步歌词与电平](docs/assets/taple-listen-lyrics.gif) | ![切歌与设置面板](docs/assets/taple-swap-settings.gif) |
+
+## 构建与运行
+
+需要图形桌面、Go 1.26 或更新版本，以及 Chrome（或具备所需 DRM 能力的 Chromium）。默认构建启用 Vulkan Compute；没有可用的实体 GPU 或驱动时明确回退 CPU。登录和完整播放仍需 Apple Music 账户与有效订阅。
+
+Linux 编译需要 C 编译器和 Vulkan headers（Fedora：`gcc vulkan-headers`；Debian/Ubuntu：`build-essential libvulkan-dev`），运行时需要 Vulkan loader 和显卡驱动。
+
+```sh
+make build
+./bin/taple-tui                   # 启动播放器（同时生成 ./bin/tapefox 软链）
+./bin/taple-tui --pure            # 使用临时配置与临时浏览器目录
+./bin/taple-tui --help
+```
+
+使用 `CGO_ENABLED=0 make build` 可构建纯 CPU 版本。按 `s` 可查看当前使用的 GPU 名称或 CPU 回退原因。
+
+### Windows / PowerShell（实验性）
+
+从 [Releases](https://github.com/IoriAkatsuki/taple-tui/releases) 下载 Windows ZIP，解压后在 Windows Terminal 的 PowerShell 中运行 `./taple-tui.exe`。需要桌面 Chrome 和支持 Vulkan 的显卡驱动；PowerShell 是启动 shell，不是图形后端。
+
+源码构建需安装 Go，以及 MSYS2 UCRT64 的 `mingw-w64-ucrt-x86_64-gcc`、`mingw-w64-ucrt-x86_64-vulkan-headers`，将 `C:\msys64\ucrt64\bin` 加入 PATH：
+
+```powershell
+$env:CC = 'gcc'
+$env:CGO_ENABLED = '1'
+./hack/build.ps1 build
+./bin/taple-tui.exe
+```
+
+### macOS（实验性）
+
+分别提供 Apple Silicon（arm64）与 Intel（amd64）构建。Vulkan 通过 MoltenVK 转为 Metal；下载的程序也需要安装 MoltenVK，不随包附带图形驱动。需要支持 `VK_EXT_layer_settings` 的 MoltenVK；程序仅对自身实例关闭 Metal Argument Buffers，以避开部分驱动的初始化崩溃。条件不满足时明确回退 CPU。
+
+```sh
+brew install go vulkan-headers molten-vk
+export CGO_CFLAGS="-I$(brew --prefix vulkan-headers)/include"
+make build
+./bin/taple-tui
+```
+
+编译需要 Xcode Command Line Tools。发布包未进行 Apple 公证或 Windows 代码签名；下载后请核对 SHA256，不要为运行程序全局关闭系统安全保护。
+
+### 实验性平台边界
+
+- Windows/macOS 保持独立的 Chrome 会话与私有管道，不开放 CDP TCP 端口。为保留正常浏览器与 DRM 行为，这两个平台使用普通/请求最小化的 Chrome 窗口，不能保证完全隐藏。
+- 系统混音 VU 暂只支持 Linux。Windows/macOS 明确提示不可用，不采集麦克风、不画假电平，也不影响播放器控制。
+- 原生 CI 检查编译、单元测试与临时空白页面的 Chrome 管道；这不等于真实账户、DRM 播放或实体 GPU 验收。GPU 不可用时的 CPU 回退也不算 GPU 测试通过。
+
+### 构建与安装 RPM 包
+
+```sh
+make rpm
+sudo dnf install ./dist/taple-tui-*.rpm         # Fedora / RHEL
+sudo zypper install ./dist/taple-tui-*.rpm      # openSUSE
+```
+
+RPM 包安装 `/usr/bin/taple-tui`、`/usr/bin/tapefox` 兼容软链与 `/usr/share/applications/taple-tui.desktop`。
+
+## 常用操作
+
+- `/` 或 `1`：聚焦搜索框；方向键或 `j/k` 移动光标；`Enter` 或单击曲目播放。
+- `1/2/3` 或 `Tab`：切换搜索、资料库、队列抽屉；`a` 将当前选中歌曲追加到播放队列末尾。
+- 搜索页 `4/5/6`：切换歌曲、专辑、歌手；资料库 `4/5/6/7/8`：切换歌单、专辑、歌曲、推荐、个人电台。
+- `Enter` 打开专辑、歌手或歌单；`Backspace` 返回上一层；`P` 从头播放当前集合；`r` 刷新列表；`l` 加载更多。
+- `i`：切换浏览与聆听场景；`z` 或点击机身：切换局部近景。
+- `Space`：播放/暂停；`p/n`：上一首/下一首；`←/→`：快退/快进；`-/+`：调节音量。
+- 聆听页 `↑/↓`、`j/k`、`PgUp/PgDn` 或滚轮：手动滚动歌词；`f`：恢复歌词自动跟随；`y`：重新加载歌词。
+- `v` 或点击电平表区域：开启或关闭 VU 电平表。
+- `b`：未登录时打开可见浏览器窗口登录，登录后返回播放会话（Windows/macOS 的 Chrome 窗口可能仍可见）；已登录时打开“清空本机登录”确认框（按 `y` 确认，`Esc`/`n` 取消，`Shift+B` 强制打开）。
+- `s`：打开操作与设置面板（可切换中/英文）；`Esc`：逐级关闭面板、退出近景或返回上层；`q` 或 `Ctrl+C`：退出。
+
+## 配置与本地路径
+
+程序从系统配置目录下的 `go-musicfox/config.toml` 或 `$MUSICFOX_ROOT/config.toml` 读取设置。Linux 使用 `$XDG_CONFIG_HOME`（默认 `~/.config`），macOS 使用 `~/Library/Application Support`，Windows 使用 `%APPDATA%`：
+
+```toml
+[main]
+motion = "full"       # full / subtle / off
+blockGlyphs = "auto"  # auto / half / quadrant / sextant / octant / braille
+frameRate = 60        # 1..240
+```
+
+配置文件缺失时直接使用上述默认值。
+
+- 浏览器会话：Chrome 通过 `--remote-debugging-pipe` 通信，独立 profile 位于上述系统配置目录的 `tapefox/apple-music/chrome`。Unix 使用 `0700`；Windows 使用仅授予当前用户访问权限的受保护 ACL。不读取个人浏览器 profile。
+- 音频采样：Linux VU 电平表通过 `parec` 读取 PulseAudio / PipeWire 的 `@DEFAULT_MONITOR@` 系统混音输出并计算 RMS dBFS。
+
+## 开发与测试
+
+```sh
+go test ./...
+go test -race ./internal/applemusic ./internal/ui
+go list -deps ./cmd
+make rpm
+```
+
+修改 `third_party/foxful-cli` 后需运行 `make vendor` 同步 `vendor/` 目录。
+
+## 致谢与许可
+
+本项目派生自 [tapefox](https://github.com/Egdon/tapefox)，早期 TUI 框架源自 [go-musicfox](https://github.com/go-musicfox/go-musicfox) 与 [foxful-cli](https://github.com/anhoder/foxful-cli)（作者 [@anhoder](https://github.com/anhoder)）。Go 模块路径保留 `github.com/go-musicfox/go-musicfox`。
+
+感谢以下开源项目与社区：
+
+- [Charmbracelet](https://charm.land/)（[Bubble Tea v2](https://github.com/charmbracelet/bubbletea)、[Bubbles v2](https://github.com/charmbracelet/bubbles)、[Lipgloss v2](https://github.com/charmbracelet/lipgloss)、[Ultraviolet](https://github.com/charmbracelet/ultraviolet)、[x/ansi](https://github.com/charmbracelet/x)）：终端渲染缓冲与事件循环。
+- [lucasb-eyer/go-colorful](https://github.com/lucasb-eyer/go-colorful) 与 [fogleman/ease](https://github.com/fogleman/ease)：色彩插值与缓动曲线。
+- [pelletier/go-toml/v2](https://github.com/pelletier/go-toml)、[gookit/gcli/v2](https://github.com/gookit/gcli)、[mattn/go-runewidth](https://github.com/mattn/go-runewidth) 与 [rivo/uniseg](https://github.com/rivo/uniseg)：配置解析、命令行路由与宽字符排版。
+- Khronos Vulkan Compute、Chromium、PulseAudio / PipeWire 以及 [LINUX DO 社区](https://linux.do/)。
+
+采用 [GPL-3.0-only](LICENSE) 许可证发布。

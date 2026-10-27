@@ -113,13 +113,19 @@ async (request) => {
     } else {
       queue = await measure('setQueueMs', () => mk.setQueue(options));
     }
-    if (!expired && sameSession() && generation === cache.playGeneration) {
-      if (collection && cache.collection === collection && queue && mk.queue === queue) {
-        collection.queue = queue;
-        collection.expires = Date.now() + 60000;
-      }
-      enableAutoplay();
+    if (expired || !sameSession() || generation !== cache.playGeneration) return {error:'stale'};
+    // Queue changes may resolve before audio starts. Await the play promise if
+    // the SDK still reports stopped/paused, surfacing codec and DRM failures.
+    if (mk.isPlaying === false) {
+      if (typeof mk.play !== 'function') return {error:'loading'};
+      await measure('playMs', () => mk.play());
     }
+    if (expired || !sameSession() || generation !== cache.playGeneration) return {error:'stale'};
+    if (collection && cache.collection === collection && queue && mk.queue === queue) {
+      collection.queue = queue;
+      collection.expires = Date.now() + 60000;
+    }
+    enableAutoplay();
     return {data:true};
   };
   const forgetLyrics = entry => {
@@ -436,9 +442,9 @@ async (request) => {
       }, 8000);
     })]);
     return measured(result);
-  } catch {
+  } catch (error) {
     // Do not export website exception details: they may contain session data.
-    return ['catalog','lyrics'].includes(request.op) ? {error:'request'} : measured({error:'request'});
+    return ['catalog','lyrics'].includes(request.op) ? {error:'request'} : measured({error:error?.name === 'NotSupportedError' ? 'media_unsupported' : 'request'});
   } finally {
     clearTimeout(timer);
   }

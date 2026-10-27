@@ -519,7 +519,9 @@ func (p *AppleMusicPage) drawFooter(now time.Time) {
 	if h >= 7 {
 		s.text(2, h-5, clock+" / "+npClock(appleDuration(p.state.Track.Duration)), uv.Style{Fg: appleNeon.Accent2}, max(0, w-4))
 		if p.pending {
-			s.text(24, h-5, "加载中…", uv.Style{Fg: appleNeon.Accent2}, w-26)
+			s.text(24, h-5, T("status.loading"), uv.Style{Fg: appleNeon.Accent2}, w-26)
+		} else if p.playbackError != "" {
+			s.text(24, h-5, T("status.play_failed"), uv.Style{Fg: appleNeon.Accent2}, w-26)
 		}
 		x, y, width := 2, h-4, w-4
 		s.repeat(x, y, width, "─", uv.Style{Fg: appleNeon.Rule})
@@ -552,7 +554,11 @@ func (p *AppleMusicPage) drawFooter(now time.Time) {
 			{"q", T("bar.quit")},
 		})
 	}
-	s.text(1, h-1, p.status, uv.Style{Fg: appleNeon.Secondary}, w-2)
+	status := p.status
+	if p.playbackError != "" {
+		status = p.playbackError
+	}
+	s.text(1, h-1, status, uv.Style{Fg: appleNeon.Secondary}, w-2)
 }
 
 func (p *AppleMusicPage) drawTransport(x, y, w int) {

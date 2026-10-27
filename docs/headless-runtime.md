@@ -35,7 +35,7 @@ macOS:   runtime/chromium/Chromium.app/Contents/MacOS/Chromium
 ## 分层验证（不要混淆）
 
 1. **进程/IPC**：验证无头标志、私有管道、退出、profile 权限和重启；不需要账户。
-2. **媒体能力**：在本地 loopback 页面检查 AAC `canPlayType` 与 Widevine EME 配置协商；不请求歌曲或许可证，不登录 Apple Music。
+2. **媒体能力**：在本地 loopback 页面检查 AAC `canPlayType` 与 Widevine EME 配置协商；不请求歌曲或许可证，不登录 Apple Music。生产播放前还会在实际 `music.apple.com` 页面检查相同能力。
 3. **完整播放**：用本人订阅及专用已登录 profile，验证完整歌曲、实际进度、暂停/跳转/切歌；此项会改变播放队列。
 
 Linux/macOS 的前两层检查：
@@ -46,11 +46,45 @@ TAPEFOX_CHROME_SMOKE=1 TAPEFOX_BROWSER_CAPABILITIES=1 \
 go test -v ./internal/applemusic -run '^TestChromePrivatePipeSmoke$' -count=1
 ```
 
-可额外设 `TAPEFOX_REQUIRE_WIDEVINE=1`，让能力不足直接判失败。`AAC="probably"` 仅是浏览器声明，`Widevine=true` 也只表示能协商该配置，不证明获得 Apple Music 许可证或成功出声。全曲集成测试需用户先登录并明确选择执行：
+可额外设 `TAPEFOX_REQUIRE_WIDEVINE=1`，让能力不足直接判失败。媒体探测保留浏览器正常的组件注册/更新路径；仅做 IPC 测试时才禁用后台网络及组件更新。Windows/macOS 的预装 CDM 也通过组件更新器注册，禁用它会产生假阴性。测试会为异步注册短暂重试，但不无限等待组件下载。
+
+`AAC="probably"` 仅是浏览器声明，`Widevine=true` 也只表示能协商该配置，不证明获得 Apple Music 许可证或成功出声。全曲集成测试需用户先登录并明确选择执行：
 
 ```sh
 TAPEFOX_APPLEMUSIC_LIVE=1 go test -v ./internal/applemusic -run '^TestAppleMusicBrowserIntegration$' -count=1
 ```
+
+## 点歌后有歌词，但一直加载
+
+歌词、队列设置和音频播放是独立阶段。`setQueue` 返回成功、歌词已显示、账号已登录，都不能证明 DRM 初始化成功或已经出声。
+
+当前源码增加了以下保护：
+
+- 已授权后、发送播放请求前检查 AAC 和 Widevine；能力不足时直接显示原因，不提交新播放队列。单次 EME 协商最多等待 3 秒；成功结果缓存 60 秒，失败结果缓存 5 秒，允许稍后显式重试。
+- 暂停正在播放的歌曲不需要重新协商 DRM；普通浏览、歌词和登录也不受此检测阻塞。
+- 设置队列后，如果 SDK 明确报告尚未播放，会等待 `play()` 的结果。浏览器的 `NotSupportedError` 会转成明确的运行时错误，不输出网页原始异常或会话数据。
+- 音频启动确认最多等待 30 秒，从操作实际派发开始计时，不计入排队等待。超时后停止“加载中”并保留失败提示；不会自动重复点歌。后续收到匹配曲目及队列位置的真实播放状态，可以恢复界面。
+
+### Windows 实测（2026-10-27 至 2026-10-28）
+
+- 用户关闭播放器后，对明确选定的已登录会话仅查询快照和能力，没有发送播放、切歌或清理操作：`ready=true`、`authorized=true`、AAC 可用、Widevine 协商失败。
+- 所用 Chrome for Testing 为 `156.0.8078.47`，已确认下载的原始 ZIP 也没有 Widevine 文件，并非仅解压遗漏。在另建的无账号测试 profile 中，官方组件更新器注册了 Widevine；等待 90 秒并重启后，CDM 目录仍无包文件，EME 仍返回 `NotSupportedError`。其他组件有成功安装记录，不能简单归因于更新器完全没有联网；为何未下发 CDM 尚未查明。
+- 此实验只在隔离目录使用开发诊断开关 `--component-updater=fast-update`；**未加入生产参数，也未在用户会话中执行组件修补**。不复制其他浏览器的 CDM，不使用非官方 DLL，不关闭 sandbox 或 CDM 校验。
+- Chromium 当前源码可为 Chrome for Testing 启用 Widevine；上述结果只描述本机该运行时和测试条件，不能推断所有 CfT 或所有无头浏览器均不支持 DRM。
+- **修正之前的 Edge 探测结论**：原 IPC smoke 禁用了组件更新，同时阻止了 Windows CDM 注册，其失败不是 Edge 无头不支持 DRM 的证据。现已分离 IPC 与媒体测试的启动参数，并增加回归测试。
+- 修正后，Edge `156.0.4314.42` 在独立无账号 profile、`--headless=new` 下，成功注册安装目录自带的 Widevine `4.10.3050.1`。本地 loopback 两轮启退和实际 `https://music.apple.com` 页面的 AAC/Widevine 检测均通过。没有复制 CDM，也没有打开用户 Edge profile 或跨浏览器迁移原登录数据。
+
+因此，**无限加载的界面问题已修复并经过测试，已有通过无头媒体能力检查的运行时，但实际全曲播放尚未恢复验证**。FFmpeg 的开源 AAC 解码器不能替代 CDM。部署时需要在所选无头运行时中确认 AAC/EME 能力，再用本人订阅单独验证实际播放；不能静默退回可见 Chrome，也不能把不同浏览器的登录 profile 直接混用。
+
+如需账户无关的官方页面能力检查，可显式运行：
+
+```powershell
+$env:TAPEFOX_BROWSER = 'TARGET'
+$env:TAPEFOX_MEDIA_PREFLIGHT_SMOKE = '1'
+go test -v ./internal/applemusic -run '^TestAppleMusicOriginMediaCapabilities$' -count=1
+```
+
+将 `TARGET` 换成运行时可执行文件绝对路径；测试使用新的临时 profile，不打开已有登录会话。如果官方页面未到达预期 origin，会单独报告加载超时，不把它当作 AAC/DRM 检测结果。本机 CfT 干净 profile 曾在这一阶段超时，不能据此宣称媒体检测通过；上述 Edge 官方页面检测则已通过。
 
 ## macOS 原生系统 API
 
@@ -74,7 +108,10 @@ CGO_ENABLED=1 TAPEFOX_REQUIRE_GPU=1 go test -v ./internal/ui/deck/... \
 - `CGO_ENABLED=0` 全量测试及 Linux amd64、Darwin arm64/amd64 交叉构建通过；这些是 CPU 构建，**不验证原生 Metal 的编译或运行**。
 - Vulkan C loader 回归与更新后的 GitHub Actions `actionlint` 检查通过。
 - Windows：无头 Chromium 私有管道、profile 清理/重启通过；测试使用临时 profile，不读取用户登录数据。
-- 本机已有 Chrome for Testing 156.0.8078.47 运行时（临时干净 profile，测试禁用组件更新）：AAC 返回 `probably`，Widevine 返回 `NotSupportedError`。这不是“FFmpeg 无法解码”，也不能推广为所有 Chromium 构建都不支持 Widevine。组件可用性仍需用实际部署的运行时另测。
-- 未完成 Apple Music 已授权全曲播放；未在 Linux 实机或 Mac 原生 Metal 设备上运行本次改动。macOS CI 已改为原生 SDK 构建，但本地改动尚未触发远端 CI。
+- 项目内 Chrome for Testing `156.0.8078.47` 已用修正后的参数复测（临时干净 profile，保留正常组件注册）：两轮无头启退/私有管道通过，AAC 返回 `probably`，Widevine 均返回 `NotSupportedError`；另一次官方页面检查在 45 秒内未到达预期 origin。没有改用 Edge，也未请求全曲播放。
+- 已推送的原生运行时改动触发了 [CI 40469118152](https://github.com/IoriAkatsuki/taple-tui/actions/runs/40469118152)：Windows、Darwin arm64 任务通过。Darwin amd64 的 Metal 编译和缓冲区往返测试通过，但 Apple Paravirtual GPU 帧一致性未通过（颜色 MAE `0.811`，阈值 `0.8`）；没有放宽容差。
+- 同次 Linux CI 的可选 EME 探测遇到 Chromium 控制管道关闭，尚未修复；不能把该轮 CI 说成三平台全绿。上述历史 CI 不覆盖本次播放错误处理改动，新提交需以对应的 CI 结果为准。
+- 本次播放修复的 Windows `go test ./...`、`go vet ./...` 和 `go test -race ./internal/applemusic ./internal/ui` 已通过。仍未完成 Apple Music 已授权全曲播放，也未在 Linux 实机或实体 Mac 上完成播放验证。
 
 详细本地日志：`.devenv/logs/headless-{capabilities,metal-test,metal-vet,metal-race,metal-gpu,metal-cpu}.log`（Git 忽略，不包含账户资料）。
+播放诊断和回归日志：`.devenv/logs/playback-*.log`；隔离组件更新记录：`.devenv/cdm-probe-*/result.log`；修正后的 Edge 记录：`.devenv/edge-cdm-probe-*/result.log`、`.devenv/logs/playback-edge-corrected-capabilities.log`（均不提交）。

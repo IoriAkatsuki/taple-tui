@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -39,6 +40,7 @@ func (p *AppleMusicPage) dispatch(action applemusic.Action) tea.Cmd {
 	p.generation++
 	if appleTrackOperation(action.Kind) {
 		p.pending, p.pendingID = true, action.ID
+		p.pendingSince, p.playbackError = time.Time{}, ""
 		p.pendingCatalogID = ""
 		if action.Kind == "play-collection" {
 			p.pendingID = action.StartID
@@ -76,6 +78,9 @@ func (p *AppleMusicPage) nextOperation() tea.Cmd {
 	op := p.operations[0]
 	p.operations = p.operations[1:]
 	p.busy = true
+	if op.generation == p.playGeneration && appleTrackOperation(op.action.Kind) {
+		p.pendingSince = time.Now()
+	}
 	return func() tea.Msg {
 		var err error
 		started := time.Now()
@@ -141,7 +146,7 @@ func (p *AppleMusicPage) acceptAction(m appleActionMsg, now time.Time) tea.Cmd {
 		}
 	}
 	if m.operation.generation == p.playGeneration && m.notSent {
-		p.pending = false
+		p.pending, p.pendingSince = false, time.Time{}
 		p.swap.armed = false
 		p.swap.awaitState = !p.swapStart.IsZero()
 	}
@@ -158,9 +163,34 @@ func (p *AppleMusicPage) acceptAction(m appleActionMsg, now time.Time) tea.Cmd {
 			p.status = "正在加载…"
 		}
 	}
+	if m.operation.generation == p.playGeneration && errors.Is(m.err, applemusic.ErrPlaybackUnavailable) {
+		p.failPlayback(m.err.Error())
+	}
 	if m.operation.generation == p.playGeneration && m.after != nil {
 		p.acceptState(*m.after, now)
 		cmd = tea.Batch(p.loadLyrics(false), p.ensureLibrary())
 	}
 	return tea.Batch(p.nextOperation(), cmd)
+}
+
+const applePlaybackWaitLimit = 30 * time.Second
+
+// Queue acknowledgement and available lyrics are not proof of audio playback.
+// Bound this separately from the RPC timeout, without resubmitting a song.
+func (p *AppleMusicPage) checkPlaybackWait(now time.Time) {
+	if !p.pending || p.pendingSince.IsZero() || now.Before(p.pendingSince.Add(applePlaybackWaitLimit)) {
+		return
+	}
+	slog.Warn("apple_music_playback_timeout", "op", p.lastAction.Kind,
+		"ready", p.state.Ready, "authorized", p.state.Authorized, "full", p.state.Full,
+		"playing", p.state.Playing, "paused", p.state.Paused, "preview", p.state.Preview)
+	p.failPlayback(T("status.play_timeout"))
+}
+
+func (p *AppleMusicPage) failPlayback(message string) {
+	p.pending, p.pendingSince = false, time.Time{}
+	p.playbackError, p.status = message, message
+	p.swap.armed = false
+	// An already animated swap may recover when a real playback state arrives.
+	p.swap.awaitState = !p.swapStart.IsZero()
 }

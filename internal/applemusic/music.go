@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"strings"
@@ -53,7 +54,11 @@ type Action struct {
 
 func scriptFor(request any) (string, error) {
 	args, err := json.Marshal(request)
-	return "(" + bridgeJS + ")(" + string(args) + ")", err
+	source := bridgeJS
+	if _, ok := request.(mediaCapabilityRequest); ok {
+		source = mediaCapabilitiesJS
+	}
+	return "(" + source + ")(" + string(args) + ")", err
 }
 
 func (b *Browser) Snapshot(ctx context.Context) (State, error) {
@@ -123,6 +128,11 @@ func (b *Browser) Do(ctx context.Context, a Action) error {
 		return errors.New("正在完成登录交接，请等待后台恢复后再播放")
 	}
 	started := time.Now()
+	if needsPlaybackCapabilities(a.Kind) {
+		if err := b.checkPlaybackCapabilities(ctx, a); err != nil {
+			return err
+		}
+	}
 	err := b.evaluate(ctx, a, nil)
 	slog.Info("apple_music_control", "op", a.Kind, "elapsed_ms", time.Since(started).Milliseconds(), "ok", err == nil)
 	return err
@@ -130,6 +140,8 @@ func (b *Browser) Do(ctx context.Context, a Action) error {
 
 func bridgeError(code string) error {
 	switch code {
+	case "media_unsupported":
+		return fmt.Errorf("%w：浏览器拒绝播放，请检查 AAC/Widevine 与当前运行时兼容性", ErrPlaybackUnavailable)
 	case "stale":
 		return errors.New("歌曲已变化，未发送过期进度操作")
 	case "origin":

@@ -90,6 +90,8 @@ var i18nCatalog = map[string]i18nEntry{
 	"status.idle":            {"Not Playing", "尚未播放"},
 	"status.track_unchanged": {"Current track retained", "保留当前曲目"},
 	"status.loading":         {"Loading…", "正在加载…"},
+	"status.play_failed":     {"Playback failed · select a track to retry", "播放失败 · 重新选曲重试"},
+	"status.play_timeout":    {"Audio did not start within 30s; check Widevine, subscription and audio output. Select a track to retry.", "音频等待超过 30 秒；请检查 Widevine、订阅及音频输出，重新选曲重试。"},
 	"status.connecting":      {"Connecting to Apple Music…", "正在连接 Apple Music…"},
 	"status.sign_in_hint":    {"Press b to sign in and view library", "请按 b 登录后查看资料库"},
 	"status.wait_backend":    {"Connecting to Apple Music…", "正在连接 Apple Music…"},

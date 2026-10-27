@@ -220,6 +220,31 @@ func TestChromePrivatePipeSmoke(t *testing.T) {
 	t.Log("Headless Chromium private pipe, own-process exit, private profile cleanup and restart verified; no account or playback was tested")
 }
 
+func chromeSmokeArgs(profile string, mediaProbe bool) []string {
+	args := chromeArgs(profile, true)
+	args[len(args)-1] = "about:blank"
+	if !mediaProbe {
+		args = append(args, "--disable-background-networking", "--disable-component-update")
+	}
+	// On Windows/macOS, even a bundled CDM is registered via the component
+	// updater. Disabling it would turn the media probe into a false negative.
+	return args
+}
+
+func TestMediaSmokeKeepsComponentRegistrationEnabled(t *testing.T) {
+	for _, mediaProbe := range []bool{false, true} {
+		args := chromeSmokeArgs(t.TempDir(), mediaProbe)
+		for _, flag := range []string{"--disable-background-networking", "--disable-component-update"} {
+			if slices.Contains(args, flag) == mediaProbe {
+				t.Fatalf("mediaProbe=%v: incorrect %s setting", mediaProbe, flag)
+			}
+		}
+		if !slices.Contains(args, "--headless=new") || !slices.Contains(args, "about:blank") || slices.Contains(args, "https://music.apple.com/") {
+			t.Fatal("smoke test must stay headless and account-free")
+		}
+	}
+}
+
 func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	t.Helper()
 	childRead, write, err := os.Pipe()
@@ -236,9 +261,8 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	defer childWrite.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	args := chromeArgs(profile, true)
-	args[len(args)-1] = "about:blank"
-	args = append(args, "--disable-background-networking", "--disable-component-update")
+	mediaProbe := os.Getenv("TAPEFOX_BROWSER_CAPABILITIES") == "1" || os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1"
+	args := chromeSmokeArgs(profile, mediaProbe)
 	cmd := exec.CommandContext(ctx, binary, args...)
 	if err := startChrome(cmd, childRead, childWrite); err != nil {
 		t.Fatal(err)
@@ -267,7 +291,7 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	if !strings.Contains(version.UserAgent, "HeadlessChrome/") {
 		t.Fatalf("runtime did not report headless mode: %s", version.Product)
 	}
-	if os.Getenv("TAPEFOX_BROWSER_CAPABILITIES") == "1" || os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1" {
+	if mediaProbe {
 		probeBrowserCapabilities(t, ctx, pipe)
 	}
 	// Browser.close can close the pipe before its acknowledgement is delivered.
@@ -312,19 +336,23 @@ func probeBrowserCapabilities(t *testing.T, ctx context.Context, p *pipe) {
   const aac = document.createElement('audio').canPlayType('audio/mp4; codecs="mp4a.40.2"');
   const result = {secure:isSecureContext, aac, widevine:false, reason:''};
   if (!navigator.requestMediaKeySystemAccess) { result.reason='EME unavailable'; return result; }
+  let timer;
   try {
     await Promise.race([
       navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{
         initDataTypes:['cenc'], audioCapabilities:[{contentType:'audio/mp4; codecs="mp4a.40.2"'}],
         distinctiveIdentifier:'optional', persistentState:'optional', sessionTypes:['temporary']
       }]),
-      new Promise((_, reject) => setTimeout(() => reject({name:'Timeout'}), 5000))
+      new Promise((_, reject) => { timer=setTimeout(() => reject({name:'Timeout'}), 5000); })
     ]);
     result.widevine=true;
   } catch (error) { result.reason=String(error.name || 'Unavailable'); }
+  finally { clearTimeout(timer); }
   return result;
 })()`
-	// A freshly created target can still be at about:blank.
+	// A fresh target can still be at about:blank, and bundled CDM registration
+	// is asynchronous. Retry startup NotSupportedError briefly, not indefinitely.
+	registrationDeadline := time.Now().Add(3 * time.Second)
 	for {
 		if err := p.call(ctx, attached.SessionID, "Runtime.evaluate", map[string]any{"expression": expression, "awaitPromise": true, "returnByValue": true, "timeout": 7000}, &response); err != nil {
 			t.Fatal(err)
@@ -332,13 +360,14 @@ func probeBrowserCapabilities(t *testing.T, ctx context.Context, p *pipe) {
 		if response.ExceptionDetails != nil {
 			t.Fatal("local capability probe failed")
 		}
-		if response.Result.Value.Reason != "loading" {
+		reason := response.Result.Value.Reason
+		if reason != "loading" && (reason != "NotSupportedError" || !time.Now().Before(registrationDeadline)) {
 			break
 		}
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
-		case <-time.After(25 * time.Millisecond):
+		case <-time.After(100 * time.Millisecond):
 		}
 	}
 	caps := response.Result.Value

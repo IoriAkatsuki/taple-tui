@@ -37,6 +37,7 @@ func (p *AppleMusicPage) confirmLogout() tea.Cmd {
 	p.lyrics = appleLyricsState{generation: p.lyrics.generation + 1}
 	p.state, p.stateAt = applemusic.State{QueueIndex: -1}, time.Time{}
 	p.pending, p.pendingID, p.pendingCatalogID, p.previousID = false, "", "", ""
+	p.pendingSince, p.playbackError = time.Time{}, ""
 	p.lastAction, p.pendingIndex = applemusic.Action{}, -1
 	p.scene, p.drawer = appleBrowse, appleSearch
 	p.selected, p.rackStart = 0, 0

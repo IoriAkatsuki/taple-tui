@@ -89,6 +89,8 @@ type AppleMusicPage struct {
 	playGeneration, settledPlayGeneration uint64
 	skipAcknowledged, pollEpoch           uint64
 	pending                               bool
+	pendingSince                          time.Time
+	playbackError                         string
 	pendingID, previousID                 string
 	pendingCatalogID                      string
 	pendingIndex                          int
@@ -194,24 +196,23 @@ func (p *AppleMusicPage) acceptState(s applemusic.State, now time.Time) {
 		p.skipAcknowledged == p.playGeneration && s.Ready && s.Authorized && s.Track.ID != "" &&
 		s.Track.ID == p.previousID && s.QueueIndex == p.pendingIndex
 	if unchangedSkip {
-		p.pending = false
+		p.pending, p.pendingSince = false, time.Time{}
 		p.status = T("status.track_unchanged")
 	}
 	if s.Ready && s.Authorized && s.Full && (s.Playing || s.Paused) && s.Track.ID != "" {
-		matches := !p.pending || (p.settledPlayGeneration == p.playGeneration && (p.pendingID == s.Track.ID || (p.pendingCatalogID != "" && p.pendingCatalogID == s.Track.ID)))
-		if p.pending && p.lastAction.Kind == "jump" {
-			matches = matches && s.QueueIndex == int(p.lastAction.Value)
+		confirmedTarget := p.matchesPlaybackTarget(s)
+		if p.playbackError != "" && confirmedTarget {
+			p.playbackError = ""
+			p.status = T("status.playing")
+			if s.Paused {
+				p.status = T("status.paused")
+			}
 		}
-		if p.pending && p.pendingID == "" {
-			matches = p.settledPlayGeneration == p.playGeneration && (s.Track.ID != p.previousID || s.QueueIndex != p.pendingIndex)
-		}
-		if matches {
-			if p.pending {
-				p.pending = false
-				p.status = "正在播放"
-				if s.Paused {
-					p.status = "已暂停"
-				}
+		if p.pending && confirmedTarget {
+			p.pending, p.pendingSince = false, time.Time{}
+			p.status = T("status.playing")
+			if s.Paused {
+				p.status = T("status.paused")
 			}
 		}
 	}
@@ -235,6 +236,22 @@ func (p *AppleMusicPage) acceptState(s applemusic.State, now time.Time) {
 	if p.drawer == appleQueue {
 		p.selected = min(p.selected, max(0, len(s.Queue)-1))
 	}
+}
+
+// Apply the same identity checks before and after the audio-start deadline.
+// In particular, duplicate song IDs at different queue positions are not a
+// successful jump, and a pre-acknowledgement state cannot confirm a request.
+func (p *AppleMusicPage) matchesPlaybackTarget(s applemusic.State) bool {
+	if p.settledPlayGeneration != p.playGeneration {
+		return false
+	}
+	if p.pendingID == "" {
+		return s.Track.ID != p.previousID || s.QueueIndex != p.pendingIndex
+	}
+	if s.Track.ID != p.pendingID && (p.pendingCatalogID == "" || s.Track.ID != p.pendingCatalogID) {
+		return false
+	}
+	return p.lastAction.Kind != "jump" || s.QueueIndex == int(p.lastAction.Value)
 }
 
 func (p *AppleMusicPage) ready() bool {
@@ -277,6 +294,7 @@ func (p *AppleMusicPage) Update(msg tea.Msg, a *model.App) (model.Page, tea.Cmd)
 		p.mousePointer = "default"
 		cmd = a.SetMousePointer("default")
 	case applePollMsg:
+		p.checkPlaybackWait(now)
 		if p.loggingOut {
 			cmd = tea.Tick(p.pollDelay(), func(time.Time) tea.Msg { return applePollMsg{} })
 		} else {
@@ -292,6 +310,7 @@ func (p *AppleMusicPage) Update(msg tea.Msg, a *model.App) (model.Page, tea.Cmd)
 			} else {
 				p.acceptState(m.state, now)
 			}
+			p.checkPlaybackWait(now)
 			cmd = tea.Batch(p.loadLyrics(false), p.ensureLibrary())
 		}
 		cmd = tea.Batch(cmd, tea.Tick(p.pollDelay(), func(time.Time) tea.Msg { return applePollMsg{} }))
@@ -652,6 +671,7 @@ func (p *AppleMusicPage) View(a *model.App) string {
 }
 
 func (p *AppleMusicPage) advance(now time.Time) {
+	p.checkPlaybackWait(now)
 	p.gpuMu.Lock()
 	if p.gpu != nil && p.gpu.Err() != nil {
 		p.renderBackend = "CPU · " + p.gpu.Err().Error()

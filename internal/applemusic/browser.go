@@ -35,9 +35,6 @@ func Open(ctx context.Context, profile string) (*Browser, error) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		return nil, errors.New("apple-music 支持 Linux，Windows/macOS 为实验性支持")
 	}
-	if runtime.GOOS == "linux" && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
-		return nil, errors.New("Apple Music 需要桌面浏览器，请在 Linux 桌面终端中启动（不是无图形的 SSH 会话）")
-	}
 	binary, err := findChrome()
 	if err != nil {
 		return nil, err
@@ -234,6 +231,9 @@ func (b *Browser) Show(ctx context.Context) error {
 		return err
 	}
 	if b.background {
+		if err := requireLoginDisplay(runtime.GOOS, os.Getenv("DISPLAY"), os.Getenv("WAYLAND_DISPLAY")); err != nil {
+			return err
+		}
 		return b.restartLocked(false)
 	}
 	session, err := b.sessionForPage(ctx)

@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -203,8 +202,8 @@ func TestPlaybackWaitsForLoginHandover(t *testing.T) {
 }
 
 func TestChromeStartsWithoutVisibleWindow(t *testing.T) {
-	if runtime.GOOS != "linux" || os.Getenv("TAPEFOX_CHROME_HIDDEN") != "1" {
-		t.Skip("opt-in Chrome Ozone virtual-window check")
+	if os.Getenv("TAPEFOX_CHROME_HIDDEN") != "1" {
+		t.Skip("opt-in unified Chromium headless check")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -217,10 +216,10 @@ func TestChromeStartsWithoutVisibleWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	if !b.background || !slices.Contains(b.cmd.Args, "--ozone-platform=headless") || slices.Contains(b.cmd.Args, "--headless=new") {
-		t.Fatal("startup must use Ozone virtual windows, not visible windows or a different headless browser identity")
+	if !b.background || !slices.Contains(b.cmd.Args, "--headless=new") || slices.Contains(b.cmd.Args, "--start-minimized") {
+		t.Fatal("startup must use unified headless, not minimized desktop windows")
 	}
-	t.Log("Chrome uses Ozone HeadlessWindow with normal browser identity")
+	t.Log("Chromium uses unified headless; DRM playback is tested separately")
 }
 
 // This opt-in check uses the user's dedicated, already authorized profile.

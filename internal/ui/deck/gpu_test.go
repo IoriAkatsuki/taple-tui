@@ -1,23 +1,30 @@
 package deck
 
 import (
+	"errors"
 	"math"
 	"os"
+	"runtime"
 	"testing"
+
+	"github.com/go-musicfox/go-musicfox/internal/ui/deck/metalcompute"
 )
 
-func TestVulkanWalkmanMatchesCPU(t *testing.T) {
-	g, err := OpenVulkan()
+func TestGPUWalkmanMatchesCPU(t *testing.T) {
+	g, err := OpenGPU()
 	if err != nil {
-		if os.Getenv("TAPEFOX_REQUIRE_VULKAN") == "1" {
+		if runtime.GOOS == "darwin" && !errors.Is(err, metalcompute.ErrUnavailable) {
+			t.Fatal(err) // Shader/pipeline failures must not masquerade as absent hardware.
+		}
+		if os.Getenv("TAPEFOX_REQUIRE_GPU") == "1" || os.Getenv("TAPEFOX_REQUIRE_VULKAN") == "1" {
 			t.Fatal(err)
 		}
 		t.Skip(err)
 	}
 	defer g.Close()
-	t.Log("Vulkan device:", g.Name())
+	t.Log(GPUBackend()+" device:", g.Name())
 	var cpu, gpu WalkmanRenderer
-	gpu.SetVulkan(g)
+	gpu.SetGPU(g)
 	for _, tier := range []Tier{Quadrant, Sextant, Octant} {
 		for style := uint8(0); style <= 5; style++ {
 			for phase := range 4 {
@@ -73,15 +80,15 @@ func TestVulkanWalkmanMatchesCPU(t *testing.T) {
 	}
 }
 
-func TestVulkanCloseRejectsFurtherWork(t *testing.T) {
-	g, err := OpenVulkan()
+func TestGPUCloseRejectsFurtherWork(t *testing.T) {
+	g, err := OpenGPU()
 	if err != nil {
 		t.Skip(err)
 	}
 	g.Close()
 	g.Close()
 	var r WalkmanRenderer
-	r.SetVulkan(g)
+	r.SetGPU(g)
 	f := r.RenderWalkman(View{W: 20, H: 10, Tier: Quadrant}, testPal, RestPose(), WalkmanState{})
 	if len(f.Cells) != 200 || g.Err() == nil {
 		t.Fatal("closed GPU did not return to CPU rendering")
@@ -89,16 +96,16 @@ func TestVulkanCloseRejectsFurtherWork(t *testing.T) {
 }
 
 func BenchmarkWalkmanBackend(b *testing.B) {
-	for _, backend := range []string{"cpu", "vulkan"} {
+	for _, backend := range []string{"cpu", "gpu"} {
 		b.Run(backend, func(b *testing.B) {
 			var r WalkmanRenderer
-			if backend == "vulkan" {
-				g, err := OpenVulkan()
+			if backend == "gpu" {
+				g, err := OpenGPU()
 				if err != nil {
 					b.Skip(err)
 				}
 				defer g.Close()
-				r.SetVulkan(g)
+				r.SetGPU(g)
 			}
 			v := View{W: 140, H: 36, Tier: Octant, Aspect: 2, Fit: Rect{74, 1, 63, 28}}
 			st := WalkmanState{State: State{Style: 4, Radii: PackRadii(.4, false)}, Cassette: 1, Door: 1, FlightFrom: Rect{24, 12, 36, 12}, FlightPose: Pose{Yaw: -.24, Pitch: .35, Scale: 1}}

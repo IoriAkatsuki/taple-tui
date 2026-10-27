@@ -16,7 +16,7 @@ import (
 	"github.com/go-musicfox/go-musicfox/internal/ui/deck"
 )
 
-func TestAppleMusicDefaultVulkanStartupAndClose(t *testing.T) {
+func TestAppleMusicDefaultGPUStartupAndClose(t *testing.T) {
 	p := NewAppleMusicPage(nil)
 	defer p.Close()
 	a := model.NewApp(model.DefaultOptions())
@@ -28,9 +28,9 @@ func TestAppleMusicDefaultVulkanStartupAndClose(t *testing.T) {
 	p.Update(m, a)
 	if m.err != nil {
 		if !strings.Contains(p.renderBackend, "CPU") {
-			t.Fatal("Vulkan failure was hidden")
+			t.Fatal("GPU failure was hidden")
 		}
-		if os.Getenv("TAPEFOX_REQUIRE_VULKAN") == "1" {
+		if os.Getenv("TAPEFOX_REQUIRE_GPU") == "1" || os.Getenv("TAPEFOX_REQUIRE_VULKAN") == "1" {
 			t.Fatal(m.err)
 		}
 		return
@@ -52,7 +52,7 @@ func TestAppleMusicDefaultVulkanStartupAndClose(t *testing.T) {
 	}
 }
 
-func TestAppleMusicActivePollingAndVulkanPreview(t *testing.T) {
+func TestAppleMusicActivePollingAndGPUPreview(t *testing.T) {
 	p := NewAppleMusicPage(nil)
 	defer p.Close()
 	p.styleRNG = rand.New(rand.NewPCG(1, 2))
@@ -82,7 +82,7 @@ func TestAppleMusicActivePollingAndVulkanPreview(t *testing.T) {
 	p.Update(m, model.NewApp(model.DefaultOptions()))
 	p.level, p.tier = motion.Full, deck.Octant
 	p.state = applemusic.State{Ready: true, Authorized: true, Full: true, Playing: true, Track: applemusic.Track{ID: "old", Name: "GPU framebuffer test", Duration: 240}, Storefront: "us", Position: 12}
-	p.tracks = []applemusic.Track{{ID: "new", Name: "Vulkan compute · 合成测试"}}
+	p.tracks = []applemusic.Track{{ID: "new", Name: "GPU compute · 合成测试"}}
 	now := time.Unix(100, 0)
 	p.draw(140, 45, now, 2)
 	p.beginInsert(p.tracks[0], now)

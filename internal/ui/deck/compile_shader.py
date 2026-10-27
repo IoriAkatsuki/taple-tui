@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Rebuild embedded SPIR-V with libshaderc; not a runtime dependency."""
+"""Rebuild SPIR-V and Metal MSL using libshaderc + spirv-cross (build tools only)."""
 import ctypes as c
 import pathlib
+import subprocess
 import sys
 
 lib = c.CDLL("libshaderc_shared.so.1")
@@ -37,3 +38,5 @@ finally:
         free_result(result)
     options_release(options)
     release(compiler)
+
+subprocess.run([sys.executable, str(path.with_name("compile_metal.py"))], check=True)

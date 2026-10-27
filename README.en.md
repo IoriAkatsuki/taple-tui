@@ -29,7 +29,9 @@ An Apple Music TUI player for desktop systems, supporting Linux, Windows, and ma
 
 ## Installation and build
 
-Runtime requires a graphical desktop, Chrome (or Chromium with Widevine DRM), and an active Apple Music subscription. The client enables Vulkan compute acceleration by default and falls back to CPU rendering when no compatible GPU driver is available.
+Current source defaults to a windowless Chromium runtime; a full Chrome installation is optional. Initial interactive sign-in still needs a graphical session. Full playback requires an active Apple Music subscription, AAC decoding, and Widevine support in the selected runtime. **Headless DRM playback is experimental: successful startup or codec negotiation is not proof of protected playback.** Linux/Windows use Vulkan compute; macOS uses native Metal, with CPU fallback when unavailable.
+
+These headless/native-Metal changes are not included in the published v1.1.0 binaries. See [runtime and validation notes (Chinese)](docs/headless-runtime.md).
 
 ### 1. Prebuilt releases
 
@@ -41,8 +43,8 @@ Download the archive or package for your platform from [GitHub Releases](https:/
 | Linux (Debian / Ubuntu) | `x86_64` | `taple-tui_*_amd64.deb` | `sudo apt install ./taple-tui_*_amd64.deb` |
 | Linux (Portable archive) | `x86_64` | `taple-tui_*_linux_amd64.tar.gz` | Extract and run `./taple-tui` |
 | Windows | `x86_64` | `taple-tui_*_windows_amd64.zip` | Extract and run `./taple-tui.exe` in Windows Terminal (PowerShell) |
-| macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | Optional `brew install molten-vk` for GPU; extract and run `./taple-tui` |
-| macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | Optional `brew install molten-vk` for GPU; extract and run `./taple-tui` |
+| macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | Extract and run `./taple-tui`; the old v1.1.0 GPU backend needs MoltenVK |
+| macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | Extract and run `./taple-tui`; the old v1.1.0 GPU backend needs MoltenVK |
 
 ### 2. Build from source
 
@@ -72,11 +74,11 @@ $env:CGO_ENABLED = '1'
 
 #### macOS
 
-Install Xcode Command Line Tools, then install Vulkan headers and MoltenVK (Vulkan-to-Metal translation) via Homebrew:
+Install Xcode Command Line Tools and Go. Current source links the system Foundation and Metal frameworks directly; Vulkan headers and MoltenVK are not needed:
 
 ```sh
-brew install go vulkan-headers molten-vk
-export CGO_CFLAGS="-I$(brew --prefix vulkan-headers)/include"
+xcode-select --install
+brew install go
 make build
 ./bin/taple-tui
 ```
@@ -90,9 +92,9 @@ make rpm                          # Build dist/taple-tui-*.rpm on Linux
 
 ### Platform notes
 
-- Window management: Linux runs Chrome in an Ozone headless virtual window. Windows and macOS launch a dedicated Chrome window (requested minimized) to preserve standard DRM playback.
+- Window management: all platforms use Chromium `--headless=new`, not minimized windows. Only explicit sign-in opens a visible window; successful sign-in hands the same private profile back to headless playback. DRM failure never silently opens a window. Linux background startup no longer requires `DISPLAY` / `WAYLAND_DISPLAY`, but a working audio output and valid session are still required.
 - Audio metering: system-mix VU metering is currently supported on Linux via `parec` (PulseAudio / PipeWire).
-- GPU acceleration: press `s` to inspect the active GPU name or CPU fallback status. On macOS, the client uses `VK_EXT_layer_settings` to disable Metal Argument Buffers for its own instance.
+- GPU acceleration: press `s` to inspect the backend (Metal / Vulkan), GPU name, or CPU fallback. macOS uses a windowless Metal compute queue and MSL generated from the same SPIR-V at development time, with no runtime Vulkan translation. Native macOS compilation and GPU validation must be performed on a Mac.
 
 ## Controls
 
@@ -120,7 +122,8 @@ frameRate = 60        # 1..240
 
 If the file does not exist, the client uses the defaults above.
 
-- Browser profile: Chrome communicates over `--remote-debugging-pipe` and stores its dedicated profile in `tapefox/apple-music/chrome` under the OS configuration directory (mode `0700` on Unix; current-user-only ACL on Windows).
+- Runtime selection: explicit `TAPEFOX_BROWSER` executable → `runtime/chromium` beside the player executable → system Chromium → legacy Chrome installations. An invalid override fails rather than silently selecting another browser. Keep the runtime's complete resources and license notices; current release scripts do not bundle Chromium or Widevine.
+- Browser profile: Chromium communicates over `--remote-debugging-pipe` and retains the existing `tapefox/apple-music/chrome` profile under the OS configuration directory (mode `0700` on Unix; current-user-only ACL on Windows).
 - Audio metering: on Linux, the VU meter runs `parec` against PulseAudio or PipeWire `@DEFAULT_MONITOR@` to measure system-mix RMS dBFS.
 
 ## Development
@@ -143,6 +146,6 @@ Built with the following open-source projects:
 - [Charmbracelet](https://charm.land/) ([Bubble Tea v2](https://github.com/charmbracelet/bubbletea), [Bubbles v2](https://github.com/charmbracelet/bubbles), [Lipgloss v2](https://github.com/charmbracelet/lipgloss), [Ultraviolet](https://github.com/charmbracelet/ultraviolet), [x/ansi](https://github.com/charmbracelet/x)) for terminal cell buffers and event loops.
 - [lucasb-eyer/go-colorful](https://github.com/lucasb-eyer/go-colorful) and [fogleman/ease](https://github.com/fogleman/ease) for color interpolation and easing curves.
 - [pelletier/go-toml/v2](https://github.com/pelletier/go-toml), [gookit/gcli/v2](https://github.com/gookit/gcli), [mattn/go-runewidth](https://github.com/mattn/go-runewidth), and [rivo/uniseg](https://github.com/rivo/uniseg) for TOML parsing, CLI routing, and CJK glyph width calculation.
-- Khronos Vulkan Compute, MoltenVK, Chromium, PulseAudio / PipeWire, and the [LINUX DO community](https://linux.do/).
+- Khronos Vulkan Compute, SPIRV-Cross, Apple Metal, Chromium, PulseAudio / PipeWire, and the [LINUX DO community](https://linux.do/).
 
 Licensed under [GPL-3.0-only](LICENSE).

@@ -6,7 +6,7 @@ import (
 )
 
 type appleRendererMsg struct {
-	gpu *deck.Vulkan
+	gpu *deck.GPU
 	err error
 }
 
@@ -15,7 +15,7 @@ func (p *AppleMusicPage) openRenderer() tea.Cmd {
 		if p.ctx.Err() != nil {
 			return nil
 		}
-		g, err := deck.OpenVulkan()
+		g, err := deck.OpenGPU()
 		// Close may race a slow driver initialization after the event loop exits.
 		p.gpuMu.Lock()
 		defer p.gpuMu.Unlock()

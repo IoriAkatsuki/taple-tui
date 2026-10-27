@@ -119,7 +119,7 @@ type AppleMusicPage struct {
 	reels                                 deck.Reels
 	renderer                              deck.WalkmanRenderer
 	gpuMu                                 sync.Mutex
-	gpu                                   *deck.Vulkan
+	gpu                                   *deck.GPU
 	renderBackend                         string
 	screen                                npScreen
 	desk                                  appleDeskStage
@@ -150,7 +150,7 @@ func (p *AppleMusicPage) IgnoreQuitKeyMsg(msg tea.KeyMsg) bool {
 func (p *AppleMusicPage) Close() error { p.cancel(); p.meter.Close(); p.closeRenderer(); return nil }
 func (p *AppleMusicPage) Init(a *model.App) tea.Cmd {
 	p.level, p.tier = a.MotionLevel(), deckTier(a)
-	p.renderBackend = "CPU · 正在检测 Vulkan"
+	p.renderBackend = "CPU · 正在检测 " + deck.GPUBackend()
 	return tea.Batch(p.poll(), p.toggleMeter(), p.openRenderer())
 }
 func (p *AppleMusicPage) poll() tea.Cmd {
@@ -254,9 +254,9 @@ func (p *AppleMusicPage) Update(msg tea.Msg, a *model.App) (model.Page, tea.Cmd)
 		if m.err != nil {
 			p.renderBackend = "CPU · " + m.err.Error()
 		} else if m.gpu != nil {
-			p.renderer.SetVulkan(m.gpu)
-			p.rackPickup.renderer.SetVulkan(m.gpu)
-			p.renderBackend = "Vulkan GPU · " + m.gpu.Name()
+			p.renderer.SetGPU(m.gpu)
+			p.rackPickup.renderer.SetGPU(m.gpu)
+			p.renderBackend = deck.GPUBackend() + " GPU · " + m.gpu.Name()
 		}
 	case appleMeterMsg:
 		p.meterOpening, p.meter = false, m.meter

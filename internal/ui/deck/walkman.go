@@ -27,7 +27,7 @@ type WalkmanState struct {
 
 // WalkmanRenderer draws the unbranded blue-and-silver player and its cassette.
 type WalkmanRenderer struct {
-	gpu   *Vulkan
+	gpu   *GPU
 	frame Frame
 	key   renderKey
 	valid bool

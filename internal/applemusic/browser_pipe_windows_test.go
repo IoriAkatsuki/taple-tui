@@ -44,6 +44,7 @@ func TestWindowsChromeFailedStartClosesInheritedHandles(t *testing.T) {
 }
 
 func TestWindowsChromeDiscoveryUsesUserInstall(t *testing.T) {
+	t.Setenv("TAPEFOX_BROWSER", "")
 	root := t.TempDir()
 	t.Setenv("PATH", root)
 	t.Setenv("LOCALAPPDATA", root)

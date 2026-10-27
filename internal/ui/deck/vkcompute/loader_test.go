@@ -14,12 +14,8 @@ func TestVulkanLoaderDispatchAndPortability(t *testing.T) {
 	runCHarness(t, "testdata/loader_test.c")
 }
 
-func TestMoltenVKUsesDiscreteResourceBindings(t *testing.T) {
-	runCHarness(t, "testdata/loader_test.c", "-D__APPLE__")
-}
-
 func TestPlatformLoaders(t *testing.T) {
-	for _, platform := range []string{"windows", "darwin"} {
+	for _, platform := range []string{"windows"} {
 		t.Run(platform, func(t *testing.T) {
 			runCHarness(t, "testdata/loader_"+platform+"_test.c")
 		})

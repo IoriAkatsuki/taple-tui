@@ -66,11 +66,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc libvulkan-dev rpm cpio
-      - name: Install macOS build dependencies
+      - name: Confirm native macOS Metal SDK
         if: runner.os == 'macOS'
         run: |
-          brew install vulkan-headers molten-vk
-          echo "CGO_CFLAGS=-I$(brew --prefix vulkan-headers)/include" >> "$GITHUB_ENV"
+          xcrun --find clang
+          xcrun --show-sdk-path
       - name: Install Windows build dependencies
         if: runner.os == 'Windows'
         id: msys2
@@ -111,37 +111,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Windows tests failed." }
           go vet ./...
           if ($LASTEXITCODE -ne 0) { throw "Windows vet failed." }
-      - name: Diagnose failed macOS Vulkan startup
+      - name: Diagnose failed native Metal startup
         if: failure() && runner.os == 'macOS'
         timeout-minutes: 4
         run: |
-          diagnostic="$RUNNER_TEMP/taple-vulkan-diagnostic"
-          mkdir -p "$diagnostic"
-          brew list --versions vulkan-headers molten-vk
-          library="$(brew --prefix molten-vk)/lib/libMoltenVK.dylib"
-          file "$library"
-          otool -L "$library"
-          CGO_CFLAGS="$CGO_CFLAGS -O0 -g" go test -c -o "$diagnostic/deck.test" ./internal/ui/deck
-          xcrun lldb --batch --no-lldbinit \
-            -o 'settings set target.disable-aslr false' \
-            -o 'settings set target.env-vars MVK_CONFIG_LOG_LEVEL=4 MVK_CONFIG_TRACE_VULKAN_CALLS=4 DYLD_PRINT_LIBRARIES=1' \
-            -o 'breakpoint set -n abort' \
-            -o run \
-            -o 'thread backtrace all' \
-            -o 'image list' \
-            -o 'process kill' \
-            -k 'thread backtrace all' \
-            -k 'image list' \
-            -k 'process kill' \
-            -- "$diagnostic/deck.test" -test.run '^TestVulkanWalkmanMatchesCPU$' -test.v -test.timeout 60s
+          system_profiler SPDisplaysDataType
+          go test -v ./internal/ui/deck/metalcompute ./internal/ui/deck \
+            -run '^(TestMetalRoundTripAndClose|TestGPUWalkmanMatchesCPU)$' -count=1 -timeout=60s
       - name: Run concurrency regressions
         run: go test -race ./internal/applemusic ./internal/ui
       - name: Verify private Chrome pipe without login or music
         env:
           TAPEFOX_CHROME_SMOKE: "1"
+          TAPEFOX_BROWSER_CAPABILITIES: "1"
         run: go test -v ./internal/applemusic -run '^TestChromePrivatePipeSmoke$' -count=1
       - name: Check physical GPU parity or report unavailable hardware
-        run: go test -v ./internal/ui/deck -run '^TestVulkanWalkmanMatchesCPU$' -count=1
+        run: go test -v ./internal/ui/deck -run '^TestGPUWalkmanMatchesCPU$' -count=1
 
       - name: Build and install Linux or macOS binary
         if: runner.os != 'Windows'

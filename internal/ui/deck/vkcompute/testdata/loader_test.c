@@ -34,25 +34,8 @@ create_instance(const VkInstanceCreateInfo *info,
                 const VkAllocationCallbacks *alloc, VkInstance *instance) {
   assert(alloc == NULL);
   uint32_t expected_extensions = portability + properties2;
-#ifdef __APPLE__
-  expected_extensions += layer_settings;
-#endif
   assert(info->enabledExtensionCount == expected_extensions);
-#ifdef __APPLE__
-  if (layer_settings) {
-    assert(strcmp(info->ppEnabledExtensionNames[portability + properties2],
-                  "VK_EXT_layer_settings") == 0);
-    const VkLayerSettingsCreateInfoEXT *settings = info->pNext;
-    assert(settings && settings->sType == VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT);
-    assert(settings->pNext == NULL && settings->settingCount == 1);
-    const VkLayerSettingEXT *setting = settings->pSettings;
-    assert(strcmp(setting->pLayerName, "MoltenVK") == 0);
-    assert(strcmp(setting->pSettingName, "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS") == 0);
-    assert(setting->type == VK_LAYER_SETTING_TYPE_BOOL32_EXT && setting->valueCount == 1);
-    assert(*(const VkBool32 *)setting->pValues == VK_FALSE);
-  } else
-#endif
-    assert(info->pNext == NULL);
+  assert(info->pNext == NULL);
   if (portability)
     assert(strcmp(info->ppEnabledExtensionNames[0],
                   "VK_KHR_portability_enumeration") == 0);
@@ -227,9 +210,6 @@ int main(void) {
     properties2 = cases[i].properties;
     subset = cases[i].subset;
     layer_settings = subset && properties2;
-#ifdef __APPLE__
-    layer_settings = 1;
-#endif
     missing_device_function = cases[i].missing;
     software_only = cases[i].software;
     instance_created = device_created = instance_destroyed = device_destroyed =
@@ -252,14 +232,5 @@ int main(void) {
     if (cases[i].creates_device)
       assert(device_queries > 0);
   }
-#ifdef __APPLE__
-  layer_settings = 0;
-  instance_created = loader_closed = 0;
-  uint32_t code[5] = {0x07230203};
-  char error[256] = {0};
-  assert(tf_gpu_open(code, sizeof(code), error, sizeof(error)) == NULL);
-  assert(strstr(error, "requires VK_EXT_layer_settings") != NULL);
-  assert(instance_created == 0 && loader_closed == 1);
-#endif
   return 0;
 }

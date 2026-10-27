@@ -23,7 +23,9 @@
 
 ## 安装与运行
 
-运行需要图形桌面、Chrome（或具备 Widevine DRM 的 Chromium）以及有效的 Apple Music 订阅。程序默认启用 Vulkan Compute 硬件加速，无可用 GPU 驱动时自动回退至 CPU 渲染。
+开发版默认使用无窗口的 Chromium 运行时，不强制安装完整 Chrome；首次交互登录仍需图形会话。完整播放需要有效的 Apple Music 订阅，以及运行时的 AAC 解码和 Widevine DRM 支持。**无头 DRM 播放仍属实验性：进程启动或 AAC 检测成功不等于能播放受保护歌曲。** Linux/Windows 默认使用 Vulkan Compute，macOS 直接使用系统 Metal，无可用 GPU 时回退 CPU。
+
+> 以下无头运行时与原生 Metal 说明针对当前源码；已发布的 v1.1.0 二进制不包含这些新改动。详见 [运行时与验证说明](docs/headless-runtime.md)。
 
 ### 1. 下载 Release 预编译包
 
@@ -36,8 +38,8 @@
 | Linux (通用二进制) | `x86_64` | `taple-tui_*_linux_amd64.tar.gz` | 解压后运行 `./taple-tui` |
 | Windows | `x86_64` | `taple-tui_*_windows_amd64.zip` | 解压后在 Windows Terminal (PowerShell) 运行 `./taple-tui.exe` |
 | Windows (独立 EXE) | `x86_64` | `taple-tui_*_windows_amd64.exe` | 无需安装，在 PowerShell 中用 `& .\taple-tui_<版本>_windows_amd64.exe` 启动 |
-| macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | 可选 `brew install molten-vk` 启用 GPU，解压后运行 `./taple-tui` |
-| macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | 可选 `brew install molten-vk` 启用 GPU，解压后运行 `./taple-tui` |
+| macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | 解压后运行 `./taple-tui`；v1.1.0 的旧 GPU 后端需 MoltenVK |
+| macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | 解压后运行 `./taple-tui`；v1.1.0 的旧 GPU 后端需 MoltenVK |
 
 ### 2. 从源码构建
 
@@ -65,7 +67,7 @@ $env:CGO_ENABLED = '1'
 ./bin/taple-tui.exe
 ```
 
-EXE 是命令行便携程序，不是图形安装器；运行时无需 Go、MSYS2 或编译工具。建议在 Windows Terminal 中启动，而不是双击。发布包未进行代码签名，Windows 可能显示未知发布者提示。Chrome 和有效 Apple Music 订阅仍需单独准备。
+EXE 是命令行便携程序，不是图形安装器；运行时无需 Go、MSYS2 或编译工具。建议在 Windows Terminal 中启动，而不是双击。发布包未进行代码签名，Windows 可能显示未知发布者提示。兼容的浏览器运行时和有效 Apple Music 订阅仍需单独准备（v1.1.0 使用 Chrome）。
 
 在 PowerShell 中测试并生成 Windows Release（ZIP、独立 EXE 和各自的 SHA-256 校验文件）：
 
@@ -80,11 +82,11 @@ Get-FileHash ./dist/taple-tui_v1.1.0_windows_amd64.exe -Algorithm SHA256
 
 #### macOS
 
-安装 Xcode Command Line Tools，并通过 Homebrew 安装 Vulkan headers 与 MoltenVK（提供 Vulkan 到 Metal 转换）：
+安装 Xcode Command Line Tools 和 Go。当前源码直接链接系统 Foundation / Metal，不需要 Vulkan headers 或 MoltenVK：
 
 ```sh
-brew install go vulkan-headers molten-vk
-export CGO_CFLAGS="-I$(brew --prefix vulkan-headers)/include"
+xcode-select --install
+brew install go
 make build
 ./bin/taple-tui
 ```
@@ -98,9 +100,9 @@ make rpm                          # 在 Linux 上构建 dist/taple-tui-*.rpm
 
 ### 平台差异说明
 
-- 窗口管理：Linux 后台 Chrome 使用 Ozone headless 虚拟窗口；Windows 与 macOS 使用请求最小化的独立 Chrome 窗口以保留标准 DRM 播放行为。
+- 窗口管理：三平台后台均使用 Chromium `--headless=new`，不是最小化窗口；不会因 DRM 失败自动弹窗。仅按 `b` 登录时使用可见窗口，登录完成后切回无头进程。Linux 后台启动不再要求 `DISPLAY` / `WAYLAND_DISPLAY`，但仍需可用音频输出与有效会话。
 - 音频电平：系统混音 VU 电平表目前仅支持 Linux（依赖 `parec` 与 PulseAudio / PipeWire）。
-- GPU 加速：按 `s` 可查看当前启用的 GPU 名称或 CPU 回退原因。macOS 通过实例级 `VK_EXT_layer_settings` 自动关闭 Metal Argument Buffers 以保持驱动稳定。
+- GPU 加速：按 `s` 查看实际后端（Metal / Vulkan）、GPU 名称或 CPU 回退原因。macOS 使用无窗口 Metal compute queue；着色器由同一份 SPIR-V 在开发时生成 MSL，无运行时 Vulkan 转译。原生 macOS 编译与设备测试需在 Mac 上完成。
 
 ## 常用操作
 
@@ -128,7 +130,8 @@ frameRate = 60        # 1..240
 
 配置文件缺失时直接使用上述默认值。
 
-- 浏览器会话：Chrome 通过 `--remote-debugging-pipe` 私有管道通信，独立 profile 位于上述系统配置目录下的 `tapefox/apple-music/chrome`（Unix 权限 `0700`，Windows 使用当前用户独占 ACL）。
+- 运行时选择：`TAPEFOX_BROWSER` 显式路径 → 可执行文件旁的 `runtime/chromium` → 系统 Chromium → 兼容旧安装的 Chrome。显式路径错误时不悄悄换浏览器。运行时须包含完整资源文件，不是单独复制一个可执行文件；当前发布脚本不会打包 Chromium 或 Widevine。
+- 浏览器会话：Chromium 通过 `--remote-debugging-pipe` 私有管道通信，独立 profile 仍位于上述系统配置目录下的 `tapefox/apple-music/chrome`（Unix 权限 `0700`，Windows 使用当前用户独占 ACL），兼容旧会话路径。
 - 音频采样：Linux 下 VU 电平表通过 `parec` 读取 PulseAudio / PipeWire 的 `@DEFAULT_MONITOR@` 系统混音输出并计算 RMS dBFS。
 
 ## 开发与测试
@@ -151,6 +154,6 @@ make package
 - [Charmbracelet](https://charm.land/)（[Bubble Tea v2](https://github.com/charmbracelet/bubbletea)、[Bubbles v2](https://github.com/charmbracelet/bubbles)、[Lipgloss v2](https://github.com/charmbracelet/lipgloss)、[Ultraviolet](https://github.com/charmbracelet/ultraviolet)、[x/ansi](https://github.com/charmbracelet/x)）：终端渲染缓冲与事件循环。
 - [lucasb-eyer/go-colorful](https://github.com/lucasb-eyer/go-colorful) 与 [fogleman/ease](https://github.com/fogleman/ease)：色彩插值与缓动曲线。
 - [pelletier/go-toml/v2](https://github.com/pelletier/go-toml)、[gookit/gcli/v2](https://github.com/gookit/gcli)、[mattn/go-runewidth](https://github.com/mattn/go-runewidth) 与 [rivo/uniseg](https://github.com/rivo/uniseg)：配置解析、命令行路由与宽字符排版。
-- Khronos Vulkan Compute、MoltenVK、Chromium、PulseAudio / PipeWire 以及 [LINUX DO 社区](https://linux.do/)。
+- Khronos Vulkan Compute、SPIRV-Cross、Apple Metal、Chromium、PulseAudio / PipeWire 以及 [LINUX DO 社区](https://linux.do/)。
 
 采用 [GPL-3.0-only](LICENSE) 许可证发布。

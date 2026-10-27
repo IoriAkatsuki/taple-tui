@@ -2,6 +2,8 @@ package applemusic
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +14,7 @@ import (
 	"time"
 )
 
-func TestChromeArgumentsKeepPrivateNormalBrowser(t *testing.T) {
+func TestChromeArgumentsKeepPrivateHeadlessRuntime(t *testing.T) {
 	profile := filepath.Join(t.TempDir(), "isolated profile")
 	for _, background := range []bool{false, true} {
 		args := chromeArgs(profile, background)
@@ -22,15 +24,79 @@ func TestChromeArgumentsKeepPrivateNormalBrowser(t *testing.T) {
 			}
 		}
 		for _, arg := range args {
-			if strings.HasPrefix(arg, "--remote-debugging-port") || strings.HasPrefix(arg, "--headless") {
-				t.Fatalf("browser must retain normal DRM identity and private pipes: %q", arg)
+			if strings.HasPrefix(arg, "--remote-debugging-port") || arg == "--no-sandbox" || arg == "--mute-audio" || arg == "--disable-gpu" {
+				t.Fatalf("runtime must retain private pipes, sandbox, audio and GPU: %q", arg)
 			}
 		}
-		if slices.Contains(args, "--ozone-platform=headless") != (background && runtime.GOOS == "linux") {
-			t.Fatal("Ozone virtual windows must only be used on Linux")
+		if slices.Contains(args, "--headless=new") != background {
+			t.Fatal("playback must be headless; only explicit login can be visible")
 		}
-		if slices.Contains(args, "--start-minimized") != (background && runtime.GOOS != "linux") {
-			t.Fatal("non-Linux background launch must request a normal minimized window")
+		if slices.Contains(args, "--new-window") == background || slices.Contains(args, "--start-minimized") || slices.Contains(args, "--ozone-platform=headless") {
+			t.Fatal("background playback must not create a minimized/virtual desktop window")
+		}
+	}
+}
+
+func TestBundledRuntimeLayout(t *testing.T) {
+	executable := filepath.Join(t.TempDir(), "install with spaces", "taple-tui")
+	for _, goos := range []string{"linux", "windows", "darwin"} {
+		for _, candidate := range bundledBrowserCandidates(executable, goos) {
+			root := filepath.Join(filepath.Dir(executable), "runtime", "chromium")
+			if !filepath.IsAbs(candidate) || !strings.HasPrefix(candidate, root+string(filepath.Separator)) {
+				t.Fatalf("%s candidate escaped the installation runtime: %q", goos, candidate)
+			}
+		}
+	}
+}
+
+func TestRuntimeSelectionAndExplicitFailure(t *testing.T) {
+	// The current test binary is executable on all supported platforms.
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(t.TempDir(), "missing-runtime")
+	for _, override := range []string{"", binary} {
+		got, err := resolveBrowser(override, []string{missing, binary})
+		if err != nil || got != binary {
+			t.Fatalf("runtime resolution: %q %v", got, err)
+		}
+	}
+	if _, err := resolveBrowser(missing, []string{binary}); err == nil {
+		t.Fatal("bad override silently fell back to another browser")
+	}
+	if _, err := resolveBrowser("", []string{missing}); err == nil {
+		t.Fatal("missing runtime was accepted")
+	}
+	preferred := filepath.Join(t.TempDir(), "bundled-runtime.exe")
+	if err := os.WriteFile(preferred, nil, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := resolveBrowser("", []string{preferred, binary}); err != nil || got != preferred {
+		t.Fatalf("bundled runtime was not preferred: %q %v", got, err)
+	}
+	if got, err := resolveBrowser(binary, []string{preferred}); err != nil || got != binary {
+		t.Fatalf("explicit runtime was not preferred: %q %v", got, err)
+	}
+}
+
+func TestHeadlessOpenDoesNotRequireDesktop(t *testing.T) {
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("TAPEFOX_BROWSER", filepath.Join(t.TempDir(), "missing-runtime"))
+	// Discovery must be reached even on Linux without a desktop. No process starts.
+	if _, err := Open(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "TAPEFOX_BROWSER") {
+		t.Fatalf("headless startup was gated on desktop availability: %v", err)
+	}
+}
+
+func TestDisplayRequiredOnlyForExplicitLinuxLogin(t *testing.T) {
+	if err := requireLoginDisplay("linux", "", ""); err == nil {
+		t.Fatal("graphical login cannot work without a display")
+	}
+	for _, tc := range [][3]string{{"linux", ":0", ""}, {"linux", "", "wayland-0"}, {"darwin", "", ""}, {"windows", "", ""}} {
+		if err := requireLoginDisplay(tc[0], tc[1], tc[2]); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
@@ -151,7 +217,7 @@ func TestChromePrivatePipeSmoke(t *testing.T) {
 		}
 		assertProfilePrivate(t, profile)
 	}
-	t.Log("Native Chrome private pipe, own-process exit, private profile cleanup and restart verified; no account or playback was tested")
+	t.Log("Headless Chromium private pipe, own-process exit, private profile cleanup and restart verified; no account or playback was tested")
 }
 
 func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
@@ -191,12 +257,18 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	}()
 	pipe := newPipe(read, write)
 	defer pipe.close()
-	var version struct{ Product string }
+	var version struct{ Product, UserAgent string }
 	if err := pipe.call(ctx, "", "Browser.getVersion", nil, &version); err != nil {
 		t.Fatal(err)
 	}
 	if version.Product == "" {
 		t.Fatal("Chrome did not report a version over the private pipe")
+	}
+	if !strings.Contains(version.UserAgent, "HeadlessChrome/") {
+		t.Fatalf("runtime did not report headless mode: %s", version.Product)
+	}
+	if os.Getenv("TAPEFOX_BROWSER_CAPABILITIES") == "1" || os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1" {
+		probeBrowserCapabilities(t, ctx, pipe)
 	}
 	// Browser.close can close the pipe before its acknowledgement is delivered.
 	_ = pipe.call(ctx, "", "Browser.close", nil, nil)
@@ -204,5 +276,77 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	case <-exited:
 	case <-ctx.Done():
 		t.Fatal("own Chrome did not exit after Browser.close")
+	}
+}
+
+// Local, account-free EME negotiation, NOT a license or playback test.
+// Loopback is a potentially trustworthy origin, as required by EME.
+func probeBrowserCapabilities(t *testing.T, ctx context.Context, p *pipe) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<!doctype html><title>Local media capability probe</title>"))
+	}))
+	defer server.Close()
+	var target struct{ TargetID string }
+	if err := p.call(ctx, "", "Target.createTarget", map[string]string{"url": server.URL}, &target); err != nil {
+		t.Fatal(err)
+	}
+	var attached struct{ SessionID string }
+	if err := p.call(ctx, "", "Target.attachToTarget", map[string]any{"targetId": target.TargetID, "flatten": true}, &attached); err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		Result struct {
+			Value struct {
+				Secure   bool   `json:"secure"`
+				AAC      string `json:"aac"`
+				Widevine bool   `json:"widevine"`
+				Reason   string `json:"reason"`
+			}
+		}
+		ExceptionDetails any
+	}
+	const expression = `(async () => {
+  if (location.protocol !== 'http:') return {secure:false, aac:'', widevine:false, reason:'loading'};
+  const aac = document.createElement('audio').canPlayType('audio/mp4; codecs="mp4a.40.2"');
+  const result = {secure:isSecureContext, aac, widevine:false, reason:''};
+  if (!navigator.requestMediaKeySystemAccess) { result.reason='EME unavailable'; return result; }
+  try {
+    await Promise.race([
+      navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{
+        initDataTypes:['cenc'], audioCapabilities:[{contentType:'audio/mp4; codecs="mp4a.40.2"'}],
+        distinctiveIdentifier:'optional', persistentState:'optional', sessionTypes:['temporary']
+      }]),
+      new Promise((_, reject) => setTimeout(() => reject({name:'Timeout'}), 5000))
+    ]);
+    result.widevine=true;
+  } catch (error) { result.reason=String(error.name || 'Unavailable'); }
+  return result;
+})()`
+	// A freshly created target can still be at about:blank.
+	for {
+		if err := p.call(ctx, attached.SessionID, "Runtime.evaluate", map[string]any{"expression": expression, "awaitPromise": true, "returnByValue": true, "timeout": 7000}, &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.ExceptionDetails != nil {
+			t.Fatal("local capability probe failed")
+		}
+		if response.Result.Value.Reason != "loading" {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+	caps := response.Result.Value
+	if !caps.Secure {
+		t.Fatal("local capability probe did not reach a trustworthy origin")
+	}
+	t.Logf("headless media capability only: AAC=%q Widevine=%t reason=%q (not Apple Music playback)", caps.AAC, caps.Widevine, caps.Reason)
+	if os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1" && (caps.AAC == "" || !caps.Widevine) {
+		t.Fatal("selected runtime cannot negotiate AAC + Widevine in headless mode")
 	}
 }

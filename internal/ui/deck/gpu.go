@@ -1,40 +1,41 @@
 package deck
 
 import (
-	_ "embed"
 	"image"
 	"sync"
-
-	"github.com/go-musicfox/go-musicfox/internal/ui/deck/vkcompute"
 )
 
 //go:generate python3 compile_shader.py
-//go:embed walkman.comp.spv
-var walkmanSPIRV []byte
 
-// Vulkan owns one hardware compute queue shared by the device and picked tape.
+type computeDevice interface {
+	Name() string
+	Compute([]float32, []float32) error
+	Close()
+}
+
+// GPU owns one hardware compute queue shared by the device and picked tape.
 // Text composition and block-glyph fitting remain in the existing renderer.
-type Vulkan struct {
+type GPU struct {
 	mu      sync.Mutex
-	device  *vkcompute.Device
+	device  computeDevice
 	err     error
 	samples []float32
 }
 
-func OpenVulkan() (*Vulkan, error) {
-	d, err := vkcompute.Open(walkmanSPIRV)
+func OpenGPU() (*GPU, error) {
+	d, err := openNativeGPU()
 	if err != nil {
 		return nil, err
 	}
-	return &Vulkan{device: d}, nil
+	return &GPU{device: d}, nil
 }
-func (g *Vulkan) Name() string { return g.device.Name() }
-func (g *Vulkan) Err() error   { g.mu.Lock(); defer g.mu.Unlock(); return g.err }
-func (g *Vulkan) Close()       { g.mu.Lock(); defer g.mu.Unlock(); g.device.Close() }
+func (g *GPU) Name() string { return g.device.Name() }
+func (g *GPU) Err() error   { g.mu.Lock(); defer g.mu.Unlock(); return g.err }
+func (g *GPU) Close()       { g.mu.Lock(); defer g.mu.Unlock(); g.device.Close() }
 
-func (r *WalkmanRenderer) SetVulkan(g *Vulkan) { r.gpu, r.valid = g, false }
+func (r *WalkmanRenderer) SetGPU(g *GPU) { r.gpu, r.valid = g, false }
 
-func (g *Vulkan) render(v View, cam camera, pose Pose, sc *walkmanScene, frame *Frame, bounds image.Rectangle) bool {
+func (g *GPU) render(v View, cam camera, pose Pose, sc *walkmanScene, frame *Frame, bounds image.Rectangle) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.err != nil {

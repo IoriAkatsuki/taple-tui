@@ -1,4 +1,4 @@
-//go:build (linux || windows || darwin) && cgo
+//go:build (linux || windows) && cgo
 
 #define VK_NO_PROTOTYPES
 #include "compute.h"
@@ -182,46 +182,18 @@ tf_gpu *tf_gpu_open(const uint32_t *code, size_t bytes, char *error,
   int properties2 =
       has_extension(props, extension_count,
                     VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-#ifdef __APPLE__
-  int layer_settings =
-      has_extension(props, extension_count, VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
-#endif
   free(props);
-#ifdef __APPLE__
-  if (!layer_settings) {
-    snprintf(error, error_size, "MoltenVK requires VK_EXT_layer_settings for safe initialization");
-    goto fail;
-  }
-#endif
   if (portability)
     instance_extensions[instance_extension_count++] =
         VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
   if (properties2)
     instance_extensions[instance_extension_count++] =
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
-#ifdef __APPLE__
-  // Two storage buffers need no argument encoders, whose probe aborts on Paravirtual Metal.
-  VkBool32 argument_buffers = VK_FALSE;
-  VkLayerSettingEXT setting = {
-      .pLayerName = "MoltenVK",
-      .pSettingName = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS",
-      .type = VK_LAYER_SETTING_TYPE_BOOL32_EXT,
-      .valueCount = 1,
-      .pValues = &argument_buffers};
-  VkLayerSettingsCreateInfoEXT settings = {
-      .sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT,
-      .settingCount = 1,
-      .pSettings = &setting};
-  instance_extensions[instance_extension_count++] = VK_EXT_LAYER_SETTINGS_EXTENSION_NAME;
-#endif
   VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                            .pApplicationName = "tapefox",
                            .apiVersion = VK_API_VERSION_1_0};
   VkInstanceCreateInfo instance = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-#ifdef __APPLE__
-      .pNext = &settings,
-#endif
       .flags =
           portability ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR : 0,
       .enabledExtensionCount = instance_extension_count,

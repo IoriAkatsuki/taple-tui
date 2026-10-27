@@ -15,7 +15,7 @@ func TestNativeBuildSelection(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				wantNative := cgo && goos != "freebsd"
+				wantNative := cgo && (goos == "linux" || goos == "windows")
 				if got := len(pkg.CgoFiles) != 0; got != wantNative {
 					t.Fatalf("native Vulkan selected=%v, want %v; Go=%v CGO=%v", got, wantNative, pkg.GoFiles, pkg.CgoFiles)
 				}

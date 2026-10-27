@@ -18,7 +18,7 @@ import (
 func NewAppleMusicCommand() *gcli.Command {
 	return &gcli.Command{
 		Name:   "apple-music",
-		UseFor: "Desktop Apple Music player using a dedicated Chrome session",
+		UseFor: "Apple Music TUI using a dedicated headless Chromium runtime",
 		Func: func(_ *gcli.Command, _ []string) error {
 			if GlobalOptions.DebugMode {
 				slogx.LevelVar().Set(slog.LevelDebug)

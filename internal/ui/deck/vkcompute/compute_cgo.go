@@ -1,4 +1,4 @@
-//go:build (linux || windows || darwin) && cgo
+//go:build (linux || windows) && cgo
 
 // Package vkcompute owns a headless compute queue and persistent host buffers.
 package vkcompute

@@ -107,8 +107,8 @@ func BenchmarkAppleMusicFrame(b *testing.B) {
 	benchmarkAppleMusicFrame(b, nil)
 }
 
-func BenchmarkAppleMusicFrameVulkan(b *testing.B) {
-	g, err := deck.OpenVulkan()
+func BenchmarkAppleMusicFrameGPU(b *testing.B) {
+	g, err := deck.OpenGPU()
 	if err != nil {
 		b.Skip(err)
 	}
@@ -119,14 +119,14 @@ func BenchmarkAppleMusicFrameVulkan(b *testing.B) {
 	}
 }
 
-func benchmarkAppleMusicFrame(b *testing.B, gpu *deck.Vulkan) {
+func benchmarkAppleMusicFrame(b *testing.B, gpu *deck.GPU) {
 	for _, kind := range []string{"playing", "pickup", "flight", "lyrics"} {
 		b.Run(kind, func(b *testing.B) {
 			p := NewAppleMusicPage(nil)
 			defer p.Close()
 			p.styleRNG = rand.New(rand.NewPCG(1, 2))
-			p.renderer.SetVulkan(gpu)
-			p.rackPickup.renderer.SetVulkan(gpu)
+			p.renderer.SetGPU(gpu)
+			p.rackPickup.renderer.SetGPU(gpu)
 			p.tier, p.level = deck.Octant, motion.Full
 			p.state = applemusic.State{Ready: true, Authorized: true, Full: true, Playing: true, Storefront: "us", Track: applemusic.Track{ID: "a", Duration: 240}, Position: 10}
 			p.tracks = []applemusic.Track{{ID: "b", Name: "Benchmark"}}

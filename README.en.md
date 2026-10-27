@@ -1,10 +1,8 @@
 # taple-tui
 
-An Apple Music TUI player for desktop systems, with Linux support and experimental Windows/macOS ports. It renders a blue-and-silver Walkman cassette deck (TPS-L2 proportions) in real time with terminal block characters. The name combines **Tap**e, App**le** (Apple Music), and **TUI**.
+An Apple Music TUI player for desktop systems, supporting Linux, Windows, and macOS. It renders a blue-and-silver Walkman cassette deck (TPS-L2 proportions) in real time with terminal block characters. The name combines **Tap**e, App**le** (Apple Music), and **TUI**.
 
-[简体中文](README.md)
-
-The public repository contains release source snapshots, required build files and demo assets, not development history, engineering records or local sign-in data.
+[简体中文](README.md) · [Releases](https://github.com/IoriAkatsuki/taple-tui/releases)
 
 ![Cassette insertion and close-up](docs/assets/taple-insert.gif)
 
@@ -23,26 +21,41 @@ The public repository contains release source snapshots, required build files an
 | :---: | :---: |
 | ![Listen scene and synced lyrics](docs/assets/taple-listen-lyrics.gif) | ![Track swap and settings](docs/assets/taple-swap-settings.gif) |
 
-## Build and run
+## Installation and build
 
-Requires a graphical desktop, Go 1.26 or newer, and Chrome (or Chromium with the required DRM support). Full playback requires an Apple Music account and subscription. The default build enables Vulkan compute with explicit CPU fallback when a physical GPU or driver is unavailable.
+Runtime requires a graphical desktop, Chrome (or Chromium with Widevine DRM), and an active Apple Music subscription. The client enables Vulkan compute acceleration by default and falls back to CPU rendering when no compatible GPU driver is available.
 
-Linux builds require a C compiler and Vulkan headers (`gcc vulkan-headers` on Fedora; `build-essential libvulkan-dev` on Debian/Ubuntu). Runtime requires the Vulkan loader and a GPU driver.
+### 1. Prebuilt releases
+
+Download the archive or package for your platform from [GitHub Releases](https://github.com/IoriAkatsuki/taple-tui/releases) (checksums are listed in `SHA256SUMS`):
+
+| Platform | Arch | Release artifact | Install / Run |
+| :--- | :--- | :--- | :--- |
+| Linux (Fedora / RHEL / openSUSE) | `x86_64` | `taple-tui-*.x86_64.rpm` | `sudo dnf install ./taple-tui-*.rpm` or `sudo zypper install ./taple-tui-*.rpm` |
+| Linux (Debian / Ubuntu) | `x86_64` | `taple-tui_*_amd64.deb` | `sudo apt install ./taple-tui_*_amd64.deb` |
+| Linux (Portable archive) | `x86_64` | `taple-tui_*_linux_amd64.tar.gz` | Extract and run `./taple-tui` |
+| Windows | `x86_64` | `taple-tui_*_windows_amd64.zip` | Extract and run `./taple-tui.exe` in Windows Terminal (PowerShell) |
+| macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | Optional `brew install molten-vk` for GPU; extract and run `./taple-tui` |
+| macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | Optional `brew install molten-vk` for GPU; extract and run `./taple-tui` |
+
+### 2. Build from source
+
+Requires Go 1.26 or newer.
+
+#### Linux
+
+Install a C compiler and Vulkan headers (`gcc vulkan-headers` on Fedora; `build-essential libvulkan-dev` on Debian/Ubuntu):
 
 ```sh
 make build
 ./bin/taple-tui                   # Start player (also creates ./bin/tapefox symlink)
 ./bin/taple-tui --pure            # Use a temporary config and browser profile
-./bin/taple-tui --help
+CGO_ENABLED=0 make build          # Build a CPU-only binary
 ```
 
-Run `CGO_ENABLED=0 make build` to build a CPU-only binary. Press `s` to view the active GPU name or CPU fallback status.
+#### Windows (PowerShell)
 
-### Windows / PowerShell (experimental)
-
-Download the Windows ZIP from [Releases](https://github.com/IoriAkatsuki/taple-tui/releases), extract it, and run `./taple-tui.exe` in PowerShell inside Windows Terminal. Install desktop Chrome and a Vulkan-capable GPU driver. PowerShell is the launch shell, not the graphics backend.
-
-Source builds require Go and the MSYS2 UCRT64 packages `mingw-w64-ucrt-x86_64-gcc` and `mingw-w64-ucrt-x86_64-vulkan-headers`. Add `C:\msys64\ucrt64\bin` to PATH:
+Install Go and the MSYS2 UCRT64 packages `mingw-w64-ucrt-x86_64-gcc` and `mingw-w64-ucrt-x86_64-vulkan-headers`. Add `C:\msys64\ucrt64\bin` to `PATH`:
 
 ```powershell
 $env:CC = 'gcc'
@@ -51,9 +64,9 @@ $env:CGO_ENABLED = '1'
 ./bin/taple-tui.exe
 ```
 
-### macOS (experimental)
+#### macOS
 
-Builds target Apple Silicon (arm64) and Intel (amd64). MoltenVK translates Vulkan to Metal. Downloaded binaries also require MoltenVK; GPU runtimes are not bundled. MoltenVK must support `VK_EXT_layer_settings`: the client disables Metal Argument Buffers for its own instance to avoid initialization crashes on affected drivers. Unmet requirements produce an explicit CPU fallback.
+Install Xcode Command Line Tools, then install Vulkan headers and MoltenVK (Vulkan-to-Metal translation) via Homebrew:
 
 ```sh
 brew install go vulkan-headers molten-vk
@@ -62,23 +75,18 @@ make build
 ./bin/taple-tui
 ```
 
-Building requires Xcode Command Line Tools. Packages are not Apple-notarized or Windows code-signed. Verify SHA256 checksums; do not globally disable OS security protections.
-
-### Experimental platform limits
-
-- Windows/macOS retain a dedicated Chrome profile and private pipes, never a CDP TCP port. They use normal/requested-minimized Chrome windows to retain normal browser/DRM behavior; fully hidden playback is not guaranteed.
-- System-output VU metering is currently Linux-only. Other platforms report it as unavailable without microphone capture or synthetic levels; playback controls remain available.
-- Native CI checks compilation, unit tests and the Chrome pipe against a disposable blank page. It does not validate real-account DRM playback or physical GPU rendering. Successful CPU fallback is not a successful GPU test.
-
-### Build and install RPM package
+### 3. Package release archives
 
 ```sh
-make rpm
-sudo dnf install ./dist/taple-tui-*.rpm         # Fedora / RHEL
-sudo zypper install ./dist/taple-tui-*.rpm      # openSUSE
+make package                      # Build dist/taple-tui_<ver>_<os>_<arch>.tar.gz (or .zip) and .sha256
+make rpm                          # Build dist/taple-tui-*.rpm on Linux
 ```
 
-The RPM package installs `/usr/bin/taple-tui`, the `/usr/bin/tapefox` symlink, and `/usr/share/applications/taple-tui.desktop`.
+### Platform notes
+
+- Window management: Linux runs Chrome in an Ozone headless virtual window. Windows and macOS launch a dedicated Chrome window (requested minimized) to preserve standard DRM playback.
+- Audio metering: system-mix VU metering is currently supported on Linux via `parec` (PulseAudio / PipeWire).
+- GPU acceleration: press `s` to inspect the active GPU name or CPU fallback status. On macOS, the client uses `VK_EXT_layer_settings` to disable Metal Argument Buffers for its own instance.
 
 ## Controls
 
@@ -90,12 +98,12 @@ The RPM package installs `/usr/bin/taple-tui`, the `/usr/bin/tapefox` symlink, a
 - `Space`: play or pause; `p/n`: previous or next track; `←/→`: seek backward or forward; `-/+`: adjust volume.
 - Listen scene `↑/↓`, `j/k`, `PgUp/PgDn`, or mouse wheel: scroll lyrics manually; `f`: resume auto-follow; `y`: reload lyrics.
 - `v` or click the VU meter: toggle the VU meter on or off.
-- `b`: open a visible browser window to sign in, then return to the playback session (Chrome may remain visible on Windows/macOS), or open the "Clear local sign-in" dialog when signed in (`y` confirms, `Esc`/`n` cancels, `Shift+B` forces open).
+- `b`: open a visible browser window to sign in, or open the "Clear local sign-in" dialog when signed in (`y` confirms, `Esc`/`n` cancels, `Shift+B` forces open).
 - `s`: open the controls and settings panel (switches between English and Chinese); `Esc`: close panel, exit close-up, or return to the parent view; `q` or `Ctrl+C`: quit.
 
 ## Configuration and local paths
 
-The client reads settings from `go-musicfox/config.toml` under the OS configuration directory, or `$MUSICFOX_ROOT/config.toml`. Linux uses `$XDG_CONFIG_HOME` (default `~/.config`), macOS uses `~/Library/Application Support`, and Windows uses `%APPDATA%`:
+The client reads settings from `go-musicfox/config.toml` under the OS configuration directory, or `$MUSICFOX_ROOT/config.toml` (`$XDG_CONFIG_HOME` or `~/.config` on Linux, `~/Library/Application Support` on macOS, `%APPDATA%` on Windows):
 
 ```toml
 [main]
@@ -106,8 +114,8 @@ frameRate = 60        # 1..240
 
 If the file does not exist, the client uses the defaults above.
 
-- Browser profile: Chrome communicates over `--remote-debugging-pipe` and stores its dedicated profile in `tapefox/apple-music/chrome` under the OS configuration directory. Unix uses mode `0700`; Windows uses a protected ACL granting access only to the current user. Personal browser profiles are not read.
-- Audio metering: on Linux the VU meter runs `parec` against PulseAudio or PipeWire `@DEFAULT_MONITOR@` to measure system-mix RMS dBFS.
+- Browser profile: Chrome communicates over `--remote-debugging-pipe` and stores its dedicated profile in `tapefox/apple-music/chrome` under the OS configuration directory (mode `0700` on Unix; current-user-only ACL on Windows).
+- Audio metering: on Linux, the VU meter runs `parec` against PulseAudio or PipeWire `@DEFAULT_MONITOR@` to measure system-mix RMS dBFS.
 
 ## Development
 
@@ -115,7 +123,7 @@ If the file does not exist, the client uses the defaults above.
 go test ./...
 go test -race ./internal/applemusic ./internal/ui
 go list -deps ./cmd
-make rpm
+make package
 ```
 
 Run `make vendor` after modifying `third_party/foxful-cli` to keep `vendor/` synchronized.
@@ -129,6 +137,6 @@ Built with the following open-source projects:
 - [Charmbracelet](https://charm.land/) ([Bubble Tea v2](https://github.com/charmbracelet/bubbletea), [Bubbles v2](https://github.com/charmbracelet/bubbles), [Lipgloss v2](https://github.com/charmbracelet/lipgloss), [Ultraviolet](https://github.com/charmbracelet/ultraviolet), [x/ansi](https://github.com/charmbracelet/x)) for terminal cell buffers and event loops.
 - [lucasb-eyer/go-colorful](https://github.com/lucasb-eyer/go-colorful) and [fogleman/ease](https://github.com/fogleman/ease) for color interpolation and easing curves.
 - [pelletier/go-toml/v2](https://github.com/pelletier/go-toml), [gookit/gcli/v2](https://github.com/gookit/gcli), [mattn/go-runewidth](https://github.com/mattn/go-runewidth), and [rivo/uniseg](https://github.com/rivo/uniseg) for TOML parsing, CLI routing, and CJK glyph width calculation.
-- Khronos Vulkan Compute, Chromium, PulseAudio / PipeWire, and the [LINUX DO community](https://linux.do/).
+- Khronos Vulkan Compute, MoltenVK, Chromium, PulseAudio / PipeWire, and the [LINUX DO community](https://linux.do/).
 
 Licensed under [GPL-3.0-only](LICENSE).

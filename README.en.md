@@ -1,5 +1,11 @@
 # taple-tui
 
+### Windows portable releases
+
+Windows releases provide a ZIP and a standalone `taple-tui_<version>_windows_amd64.exe`, plus SHA-256 checksums. Run the EXE from PowerShell / Windows Terminal; it is a console application, not an installer. No Go or MSYS2 installation is needed at runtime. Chrome and an Apple Music subscription are still required. Binaries are unsigned.
+
+From a configured Windows build environment, run `go test ./...`, `go vet ./...`, then `./hack/release-windows.ps1 -Version v1.1.0`. Pushing a `v*` tag publishes a GitHub Release only after all native platform checks succeed; branch builds produce Actions artifacts only.
+
 An Apple Music TUI player for desktop systems, supporting Linux, Windows, and macOS. It renders a blue-and-silver Walkman cassette deck (TPS-L2 proportions) in real time with terminal block characters. The name combines **Tap**e, App**le** (Apple Music), and **TUI**.
 
 [简体中文](README.md) · [Releases](https://github.com/IoriAkatsuki/taple-tui/releases)

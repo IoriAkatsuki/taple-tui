@@ -35,6 +35,7 @@
 | Linux (Debian / Ubuntu) | `x86_64` | `taple-tui_*_amd64.deb` | `sudo apt install ./taple-tui_*_amd64.deb` |
 | Linux (通用二进制) | `x86_64` | `taple-tui_*_linux_amd64.tar.gz` | 解压后运行 `./taple-tui` |
 | Windows | `x86_64` | `taple-tui_*_windows_amd64.zip` | 解压后在 Windows Terminal (PowerShell) 运行 `./taple-tui.exe` |
+| Windows (独立 EXE) | `x86_64` | `taple-tui_*_windows_amd64.exe` | 无需安装，在 PowerShell 中用 `& .\taple-tui_<版本>_windows_amd64.exe` 启动 |
 | macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | 可选 `brew install molten-vk` 启用 GPU，解压后运行 `./taple-tui` |
 | macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | 可选 `brew install molten-vk` 启用 GPU，解压后运行 `./taple-tui` |
 
@@ -63,6 +64,19 @@ $env:CGO_ENABLED = '1'
 ./hack/build.ps1 build
 ./bin/taple-tui.exe
 ```
+
+EXE 是命令行便携程序，不是图形安装器；运行时无需 Go、MSYS2 或编译工具。建议在 Windows Terminal 中启动，而不是双击。发布包未进行代码签名，Windows 可能显示未知发布者提示。Chrome 和有效 Apple Music 订阅仍需单独准备。
+
+在 PowerShell 中测试并生成 Windows Release（ZIP、独立 EXE 和各自的 SHA-256 校验文件）：
+
+```powershell
+go test ./...
+go vet ./...
+./hack/release-windows.ps1 -Version v1.1.0
+Get-FileHash ./dist/taple-tui_v1.1.0_windows_amd64.exe -Algorithm SHA256
+```
+
+维护者推送 `v*` 版本标签后，GitHub Actions 会在所有原生平台检查通过后自动发布 Release，包含 Windows EXE / ZIP 与 `SHA256SUMS`；普通分支构建只上传 Actions artifacts，不创建 Release。
 
 #### macOS
 

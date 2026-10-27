@@ -3,12 +3,13 @@ name: Native platform builds
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
         description: Version embedded in the binary and archive name
         required: true
-        default: v1.1.0-rc.1
+        default: v1.1.0
         type: string
 
 permissions:
@@ -21,7 +22,7 @@ concurrency:
 env:
   CGO_ENABLED: "1"
   GOTOOLCHAIN: local
-  VERSION: ${{ inputs.version || 'v1.1.0-rc.1' }}
+  VERSION: ${{ inputs.version || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || 'v1.1.0' }}
 
 jobs:
   build:
@@ -64,7 +65,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc libvulkan-dev
+          sudo apt-get install -y --no-install-recommends gcc libvulkan-dev rpm cpio
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
         run: |
@@ -100,7 +101,16 @@ jobs:
           test "$(go env CGO_ENABLED)" = 1
           go version
       - name: Run all tests
+        if: runner.os != 'Windows'
         run: go test ./...
+      - name: Test Windows from PowerShell
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          go test ./...
+          if ($LASTEXITCODE -ne 0) { throw "Windows tests failed." }
+          go vet ./...
+          if ($LASTEXITCODE -ne 0) { throw "Windows vet failed." }
       - name: Diagnose failed macOS Vulkan startup
         if: failure() && runner.os == 'macOS'
         timeout-minutes: 4
@@ -149,6 +159,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Installed binary failed." }
       - name: Package only the executable, readmes and license
         run: go run ./hack/package -version "$VERSION"
+      - name: Package Linux DEB and RPM
+        if: runner.os == 'Linux'
+        run: hack/package-linux.sh "$VERSION"
       - name: Verify checksum and start the extracted binary
         env:
           RELEASE_OS: ${{ matrix.goos }}
@@ -183,7 +196,52 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: taple-tui-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/taple-tui_*
+          path: |
+            dist/taple-tui_*
+            dist/taple-tui-*.rpm*
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+  release:
+    name: Publish verified release packages
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: taple-tui-*
+          merge-multiple: true
+          path: dist
+      - name: Publish archives and standalone Windows executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c -- *.sha256
+          name="taple-tui_${RELEASE_TAG}_windows_amd64"
+          unzip -p "$name.zip" "$name/taple-tui.exe" > "$name.exe"
+          sha256sum "$name.exe" > "$name.exe.sha256"
+          cat ./*.sha256 > SHA256SUMS
+          # Draft first: a partial upload must never become a public release.
+          notes=(--generate-notes)
+          if [[ -f "../docs/releases/${RELEASE_TAG}.md" ]]; then
+            notes=(--notes-file "../docs/releases/${RELEASE_TAG}.md")
+          fi
+          gh release create "$RELEASE_TAG" --verify-tag --draft "${notes[@]}" \
+            --title "$RELEASE_TAG" ./*
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            gh release edit "$RELEASE_TAG" --prerelease --draft=false
+          else
+            gh release edit "$RELEASE_TAG" --draft=false
+          fi

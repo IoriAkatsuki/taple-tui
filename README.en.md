@@ -99,7 +99,7 @@ chmod 600 "$HOME/apple-music-cookies.json"
 ./taple-tui --import-cookies "$HOME/apple-music-cookies.json"
 ```
 
-Netscape cookie jars and browser JSON arrays are supported. The player starts after import, without requesting playback. An already authorized profile is not overwritten. The source file is unchanged and cookie values are never included in import errors or logs. **Accepted cookie writes do not prove authorization, subscription access or DRM playback.** Keep credential files outside the repository and never attach them to issues. See [format, Windows ACL and session rules](docs/cookie-import.md).
+Netscape cookie jars and browser JSON arrays are supported. The player starts after import, without requesting playback. An already authorized profile is not overwritten. The source file is unchanged and cookie values are never included in import errors or logs. **Accepted cookie writes do not prove authorization, subscription access or DRM playback.** Keep credential files outside the repository and never attach them to issues. See [format, Windows ACL and session rules](https://github.com/IoriAkatsuki/taple-tui/blob/main/docs/cookie-import.md).
 
 ### Platform notes
 

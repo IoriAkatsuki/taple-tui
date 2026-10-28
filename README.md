@@ -107,7 +107,7 @@ chmod 600 "$HOME/apple-music-cookies.json"
 ./taple-tui --import-cookies "$HOME/apple-music-cookies.json"
 ```
 
-支持 Netscape Cookie Jar 和浏览器 JSON 数组；导入后继续启动 TUI，不自动播放。已授权会话拒绝混入，输入文件不改写，Cookie 值不进入日志。**导入成功不等于账号授权或 DRM 播放成功。** Windows ACL、允许的域、过期与会话规则见 [Cookie 导入说明](docs/cookie-import.md)。文件应放在仓库外，勿上传到 issue 或聊天。
+支持 Netscape Cookie Jar 和浏览器 JSON 数组；导入后继续启动 TUI，不自动播放。已授权会话拒绝混入，输入文件不改写，Cookie 值不进入日志。**导入成功不等于账号授权或 DRM 播放成功。** Windows ACL、允许的域、过期与会话规则见 [Cookie 导入说明](https://github.com/IoriAkatsuki/taple-tui/blob/main/docs/cookie-import.md)。文件应放在仓库外，勿上传到 issue 或聊天。
 
 ### 平台差异说明
 

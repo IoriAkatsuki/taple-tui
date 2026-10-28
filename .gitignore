@@ -49,3 +49,7 @@ cookies.txt
 *.cookies.json
 *.cookies.txt
 cookie-exports/
+*-cookies.json
+*-cookies.txt
+cookies-*.json
+cookies-*.txt

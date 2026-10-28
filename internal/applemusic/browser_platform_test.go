@@ -262,7 +262,8 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	}
 	defer read.Close()
 	defer childWrite.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// A native CI VM may spend tens of seconds on first process startup.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	mediaProbe := os.Getenv("TAPEFOX_BROWSER_CAPABILITIES") == "1" || os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1"
 	args := chromeSmokeArgs(profile, mediaProbe)
@@ -475,7 +476,7 @@ func logChromeSmokeBinary(t *testing.T, binary string) {
 		_ = f.Close()
 		t.Logf("Chrome selected binary: script_wrapper=%t header_error=%v", string(prefix[:]) == "#!", readErr)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	output := &chromeSmokeOutput{}
 	cmd := exec.CommandContext(ctx, binary, "--version")

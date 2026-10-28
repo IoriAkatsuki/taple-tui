@@ -1,4 +1,4 @@
-// Package applemusic controls the official web player, never its credentials.
+// Package applemusic controls an isolated official web player without exporting credentials.
 package applemusic
 
 import (

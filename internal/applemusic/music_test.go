@@ -1,6 +1,7 @@
 package applemusic
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -37,14 +38,18 @@ func runBridge(t *testing.T, setup string, request any) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Cold Node startup on Windows CI can exceed 3s; script timing assertions remain independent.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// The process budget includes cold Windows startup; JS timeout assertions are independent.
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, node, "--input-type=module", "-")
-	cmd.Stdin = strings.NewReader(setup + "; console.log(JSON.stringify(await " + script + "));")
+	const started = "tapefox-fixture-started\n"
+	marker, _ := json.Marshal(started)
+	cmd.Stdin = strings.NewReader("process.stderr.write(" + string(marker) + ");" + setup + "; console.log(JSON.stringify(await " + script + "));")
 	output, err := cmd.CombinedOutput()
+	fixtureStarted := bytes.Contains(output, []byte(started))
+	output = bytes.Replace(output, []byte(started), nil, 1)
 	if err != nil {
-		t.Fatalf("bridge: %v (context: %v): %s", err, ctx.Err(), output)
+		t.Fatalf("bridge: %v (context: %v, fixture_started=%v): %s", err, ctx.Err(), fixtureStarted, output)
 	}
 	return output
 }

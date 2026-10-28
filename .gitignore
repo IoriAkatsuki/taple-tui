@@ -42,3 +42,10 @@ chrome-profile/
 .vscode/
 AGENTS.md
 AGENTS.override.md
+
+# User-supplied cookie exports must stay outside release sources.
+cookies.json
+cookies.txt
+*.cookies.json
+*.cookies.txt
+cookie-exports/

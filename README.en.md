@@ -90,6 +90,17 @@ make package                      # Build dist/taple-tui_<ver>_<os>_<arch>.tar.g
 make rpm                          # Build dist/taple-tui-*.rpm on Linux
 ```
 
+### Import a local cookie file
+
+Import only your own Apple Music cookies into the dedicated application profile:
+
+```sh
+chmod 600 "$HOME/apple-music-cookies.json"
+./taple-tui --import-cookies "$HOME/apple-music-cookies.json"
+```
+
+Netscape cookie jars and browser JSON arrays are supported. The player starts after import, without requesting playback. An already authorized profile is not overwritten. The source file is unchanged and cookie values are never included in import errors or logs. **Accepted cookie writes do not prove authorization, subscription access or DRM playback.** Keep credential files outside the repository and never attach them to issues. See [format, Windows ACL and session rules](docs/cookie-import.md).
+
 ### Platform notes
 
 - Window management: all platforms use Chromium `--headless=new`, not minimized windows. Only explicit sign-in opens a visible window; successful sign-in hands the same private profile back to headless playback. DRM failure never silently opens a window. Linux background startup no longer requires `DISPLAY` / `WAYLAND_DISPLAY`, but a working audio output and valid session are still required.

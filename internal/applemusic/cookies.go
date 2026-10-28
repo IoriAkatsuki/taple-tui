@@ -61,7 +61,7 @@ type exportedCookie struct {
 func ReadCookieFile(path string) (CookieJar, error) {
 	file, err := openCookieFile(path)
 	if err != nil {
-		return CookieJar{}, errors.New("无法读取 Cookie 文件；请使用当前用户独占的普通文件，禁止链接（Unix 权限应为 0600）")
+		return CookieJar{}, errors.New("无法读取 Cookie 文件；请使用当前用户独占的普通文件，禁止链接（Unix 权限 0600，Windows 使用当前用户专用受保护 ACL）")
 	}
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxCookieFileBytes+1))
@@ -141,6 +141,9 @@ func parseNetscapeCookies(data []byte) ([]exportedCookie, error) {
 			return nil, errors.New("Cookie 到期时间必须是 Unix 秒数")
 		}
 		hostOnly := fields[1] == "FALSE"
+		if expiry == 0 {
+			expiry = -1
+		}
 		entries = append(entries, exportedCookie{Domain: fields[0], HostOnly: &hostOnly, Path: fields[2], Secure: fields[3] == "TRUE", HTTPOnly: httpOnly, Expires: &expiry, Name: fields[5], Value: fields[6]})
 		if len(entries) > maxCookieCount {
 			return nil, errors.New("Cookie 条目超过 256 个限制")
@@ -189,6 +192,11 @@ func normalizeCookie(entry exportedCookie, now time.Time) (cookieParam, string, 
 	if !strings.HasPrefix(entry.Path, "/") || len(entry.Path) > 2048 || strings.ContainsAny(entry.Path, "\r\n\x00;") {
 		return bad("路径无效")
 	}
+	for _, ch := range []byte(entry.Path) {
+		if ch < 0x20 || ch == 0x7f {
+			return bad("路径包含控制字符")
+		}
+	}
 	if entry.URL != "" {
 		u, err := url.Parse(entry.URL)
 		if err != nil || u.Scheme != "https" || u.Host != domain || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -234,7 +242,7 @@ func normalizeCookie(entry exportedCookie, now time.Time) (cookieParam, string, 
 	if entry.Session != nil && *entry.Session && expires != nil && *expires > 0 {
 		return bad("会话属性与到期时间冲突")
 	}
-	if expires != nil && *expires > 0 {
+	if expires != nil && *expires >= 0 && (entry.Session == nil || !*entry.Session) {
 		c.Expires = expires
 	}
 	key := domain + "\x00" + c.Path + "\x00" + c.Name

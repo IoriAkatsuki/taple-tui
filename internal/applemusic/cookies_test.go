@@ -111,3 +111,16 @@ func TestCookieFileRequiresPrivateRegularInput(t *testing.T) {
 		t.Fatal("source was changed")
 	}
 }
+
+func TestCookieJSONZeroExpiryIsExpiredNotResurrected(t *testing.T) {
+	jar, err := parseCookies([]byte(`[{"domain":"music.apple.com","name":"expired-at-epoch","value":"fixture","expires":0},{"domain":"music.apple.com","name":"session","value":"fixture","expires":-1}]`), time.Now())
+	if err != nil || jar.Count() != 1 || jar.Expired() != 1 {
+		t.Fatalf("JSON epoch expiry was converted to a live session: accepted=%d expired=%d err=%v", jar.Count(), jar.Expired(), err)
+	}
+}
+
+func TestCookieImportRejectsControlBytesInPath(t *testing.T) {
+	if _, err := parseCookies([]byte(`[{"domain":"music.apple.com","name":"synthetic","value":"fixture","path":"/bad\tpath"}]`), time.Now()); err == nil {
+		t.Fatal("control byte in path accepted")
+	}
+}

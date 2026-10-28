@@ -98,6 +98,17 @@ make package                      # 生成当前平台的 dist/taple-tui_<ver>_<
 make rpm                          # 在 Linux 上构建 dist/taple-tui-*.rpm
 ```
 
+### 本地 Cookie 导入
+
+可将自己的 Apple Music Cookie 文件导入程序专用会话，无需把凭证交给第三方：
+
+```sh
+chmod 600 "$HOME/apple-music-cookies.json"
+./taple-tui --import-cookies "$HOME/apple-music-cookies.json"
+```
+
+支持 Netscape Cookie Jar 和浏览器 JSON 数组；导入后继续启动 TUI，不自动播放。已授权会话拒绝混入，输入文件不改写，Cookie 值不进入日志。**导入成功不等于账号授权或 DRM 播放成功。** Windows ACL、允许的域、过期与会话规则见 [Cookie 导入说明](docs/cookie-import.md)。文件应放在仓库外，勿上传到 issue 或聊天。
+
 ### 平台差异说明
 
 - 窗口管理：三平台后台均使用 Chromium `--headless=new`，不是最小化窗口；不会因 DRM 失败自动弹窗。仅按 `b` 登录时使用可见窗口，登录完成后切回无头进程。Linux 后台启动不再要求 `DISPLAY` / `WAYLAND_DISPLAY`，但仍需可用音频输出与有效会话。

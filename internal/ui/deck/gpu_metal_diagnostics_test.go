@@ -16,14 +16,14 @@ func TestMetalNormalizeDiagnostic(t *testing.T) {
 	if os.Getenv("TAPEFOX_GPU_DIAGNOSTICS") != "1" {
 		t.Skip("set TAPEFOX_GPU_DIAGNOSTICS=1 for native Metal precision diagnostics")
 	}
-	if !strings.Contains(walkmanMSL, "fast::normalize(") {
-		t.Fatal("generated shader no longer contains the diagnostic substitution target")
+	if !strings.Contains(walkmanMSL, "precise::normalize(") {
+		t.Fatal("generated shader no longer contains precise normalization")
 	}
 	for _, variant := range []string{"fast-normalize", "precise-normalize"} {
 		t.Run(variant, func(t *testing.T) {
 			source := walkmanMSL
-			if variant == "precise-normalize" {
-				source = strings.ReplaceAll(source, "fast::normalize(", "precise::normalize(")
+			if variant == "fast-normalize" {
+				source = strings.ReplaceAll(source, "precise::normalize(", "fast::normalize(")
 			}
 			d, err := metalcompute.Open(source)
 			if err != nil {
@@ -31,7 +31,7 @@ func TestMetalNormalizeDiagnostic(t *testing.T) {
 			}
 			g := &GPU{device: d}
 			defer g.Close()
-			t.Logf("diagnostic-only %s: MSL 2.0, fastMathEnabled=NO, substitutions=%d; CPU uses float64 1/sqrt(dot)", variant, strings.Count(walkmanMSL, "fast::normalize("))
+			t.Logf("diagnostic-only %s: MSL 2.0, fastMathEnabled=NO, substitutions=%d; CPU uses float64 1/sqrt(dot)", variant, strings.Count(walkmanMSL, "precise::normalize("))
 			v := View{W: 96, H: 28, Tier: Quadrant, Aspect: 2}
 			pose := RestPose()
 			st := WalkmanState{State: State{TrackNum: 29, Radii: PackRadii(.37, false), Angles: [2]float64{.3, 1.2}}}

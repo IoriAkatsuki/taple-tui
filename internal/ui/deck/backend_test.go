@@ -44,3 +44,13 @@ func TestMetalShaderMatchesSPIRV(t *testing.T) {
 		}
 	}
 }
+
+func TestMetalRayNormalizationUsesPreciseMath(t *testing.T) {
+	msl, err := os.ReadFile("walkman.metal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(msl), "fast::normalize(") || !strings.Contains(string(msl), "precise::normalize(") {
+		t.Fatal("explicit fast normalization bypasses compiler precision settings on Intel Metal")
+	}
+}

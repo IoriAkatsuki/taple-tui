@@ -66,6 +66,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc libvulkan-dev rpm cpio
+      - name: Select sandbox-capable Linux browser
+        if: runner.os == 'Linux'
+        run: |
+          # The runner's unpacked Chromium cannot use Ubuntu's AppArmor sandbox policy.
+          # Installed Chrome has a supported sandbox; do not pass --no-sandbox.
+          browser="$(command -v google-chrome)"
+          test -x "$browser"
+          printf 'TAPEFOX_BROWSER=%s\n' "$browser" >> "$GITHUB_ENV"
       - name: Confirm native macOS Metal SDK
         if: runner.os == 'macOS'
         run: |

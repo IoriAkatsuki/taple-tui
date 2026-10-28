@@ -1,6 +1,7 @@
 package commands
 
 var GlobalOptions struct {
-	DebugMode bool
-	PureMode  bool
+	DebugMode  bool
+	PureMode   bool
+	CookieFile string
 }

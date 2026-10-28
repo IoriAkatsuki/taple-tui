@@ -29,6 +29,7 @@ func newCLI() *gcli.App {
 	app.GOptsBinder = func(gf *gcli.Flags) {
 		gf.BoolOpt(&commands.GlobalOptions.DebugMode, "debug", "", false, "Enable debug logging")
 		gf.BoolOpt(&commands.GlobalOptions.PureMode, "pure", "", false, "Use a temporary configuration and Chrome profile")
+		gf.StrOpt(&commands.GlobalOptions.CookieFile, "import-cookies", "", "", "Import a private Apple Music cookie file, then start the player (not proof of authorization)")
 	}
 	app.Add(commands.NewAppleMusicCommand())
 	app.DefaultCommand("apple-music")

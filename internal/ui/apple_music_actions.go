@@ -141,8 +141,8 @@ func (p *AppleMusicPage) acceptAction(m appleActionMsg, now time.Time) tea.Cmd {
 	if m.operation.generation == p.playGeneration && appleTrackOperation(m.operation.action.Kind) {
 		// Pre-control polls cannot prove a no-op or overwrite the read-back.
 		p.pollEpoch++
-		if m.err == nil && !m.notSent && (m.operation.action.Kind == "next" || m.operation.action.Kind == "previous") {
-			p.skipAcknowledged = m.operation.generation
+		if m.err == nil && !m.notSent {
+			p.playAcknowledged = m.operation.generation
 		}
 	}
 	if m.operation.generation == p.playGeneration && m.notSent {

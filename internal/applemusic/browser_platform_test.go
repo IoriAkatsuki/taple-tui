@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -190,6 +192,7 @@ func TestChromePrivatePipeSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	logChromeSmokeBinary(t, binary)
 	profile := filepath.Join(t.TempDir(), "chrome")
 	identity, err := prepareProfile(profile)
 	if err != nil {
@@ -264,38 +267,55 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	mediaProbe := os.Getenv("TAPEFOX_BROWSER_CAPABILITIES") == "1" || os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1"
 	args := chromeSmokeArgs(profile, mediaProbe)
 	cmd := exec.CommandContext(ctx, binary, args...)
+	stderr := &chromeSmokeOutput{}
+	cmd.Stderr = stderr
+	cmd.WaitDelay = 2 * time.Second
+	rpc := &chromeSmokeRPC{t: t, stage: "startChrome"}
+	t.Logf("Chrome start: binary=%q mediaProbe=%t sandbox=enabled profile=disposable", binary, mediaProbe)
 	if err := startChrome(cmd, childRead, childWrite); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Chrome start: %v; stderr=%q", err, stderr.text(profile))
 	}
 	childRead.Close()
 	childWrite.Close()
 	exited := make(chan struct{})
-	go func() { _ = cmd.Wait(); close(exited) }()
+	var waitErr error
+	go func() { waitErr = cmd.Wait(); close(exited) }()
 	defer func() {
+		observedExit := false
+		var killErr error
 		select {
 		case <-exited:
+			observedExit = true
 		default:
-			_ = cmd.Process.Kill()
+			killErr = cmd.Process.Kill()
 			<-exited
 		}
+		exitCode := -1
+		if cmd.ProcessState != nil {
+			exitCode = cmd.ProcessState.ExitCode()
+		}
+		t.Logf("Chrome process: pid=%d last_stage=%s exit_observed_before_cleanup=%t exit_code=%d wait=%v cleanup_kill=%v context=%v", cmd.Process.Pid, rpc.stage, observedExit, exitCode, waitErr, killErr, ctx.Err())
+		t.Logf("Chrome stderr (tail, <=8192 bytes, paths/URLs/sensitive lines redacted): %q", stderr.text(profile))
 	}()
 	pipe := newPipe(read, write)
 	defer pipe.close()
+	rpc.pipe = pipe
 	var version struct{ Product, UserAgent string }
-	if err := pipe.call(ctx, "", "Browser.getVersion", nil, &version); err != nil {
+	if err := rpc.call(ctx, "", "Browser.getVersion", nil, &version); err != nil {
 		t.Fatal(err)
 	}
 	if version.Product == "" {
 		t.Fatal("Chrome did not report a version over the private pipe")
 	}
+	t.Logf("Chrome CDP version: product=%q", version.Product)
 	if !strings.Contains(version.UserAgent, "HeadlessChrome/") {
 		t.Fatalf("runtime did not report headless mode: %s", version.Product)
 	}
 	if mediaProbe {
-		probeBrowserCapabilities(t, ctx, pipe)
+		probeBrowserCapabilities(t, ctx, rpc)
 	}
 	// Browser.close can close the pipe before its acknowledgement is delivered.
-	_ = pipe.call(ctx, "", "Browser.close", nil, nil)
+	_ = rpc.call(ctx, "", "Browser.close", nil, nil)
 	select {
 	case <-exited:
 	case <-ctx.Done():
@@ -305,7 +325,7 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 
 // Local, account-free EME negotiation, NOT a license or playback test.
 // Loopback is a potentially trustworthy origin, as required by EME.
-func probeBrowserCapabilities(t *testing.T, ctx context.Context, p *pipe) {
+func probeBrowserCapabilities(t *testing.T, ctx context.Context, p *chromeSmokeRPC) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -377,5 +397,125 @@ func probeBrowserCapabilities(t *testing.T, ctx context.Context, p *pipe) {
 	t.Logf("headless media capability only: AAC=%q Widevine=%t reason=%q (not Apple Music playback)", caps.AAC, caps.Widevine, caps.Reason)
 	if os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1" && (caps.AAC == "" || !caps.Widevine) {
 		t.Fatal("selected runtime cannot negotiate AAC + Widevine in headless mode")
+	}
+}
+
+// Test-only diagnostics: no production profile, credentials or RPC payloads.
+const chromeSmokeOutputLimit = 8192
+
+type chromeSmokeOutput struct {
+	mu   sync.Mutex
+	tail []byte
+}
+
+func (o *chromeSmokeOutput) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	n := len(p)
+	if n >= chromeSmokeOutputLimit {
+		o.tail = append(o.tail[:0], p[n-chromeSmokeOutputLimit:]...)
+	} else {
+		if keep := chromeSmokeOutputLimit - n; len(o.tail) > keep {
+			copy(o.tail, o.tail[len(o.tail)-keep:])
+			o.tail = o.tail[:keep]
+		}
+		o.tail = append(o.tail, p...)
+	}
+	return n, nil
+}
+
+var chromeSmokeURL = regexp.MustCompile(`(?i)(?:https?|wss?)://[^\s<>"']+`)
+var chromeSmokeEmail = regexp.MustCompile(`(?i)[a-z0-9_.+%-]+@[a-z0-9.-]+\.[a-z]{2,}`)
+var chromeSmokeSensitive = regexp.MustCompile(`(?i)cookie|authorization|password|passwd|token|secret|bearer|basic\s`)
+
+func (o *chromeSmokeOutput) text(profile string) string {
+	o.mu.Lock()
+	text := string(o.tail)
+	o.mu.Unlock()
+	if profile != "" {
+		text = strings.ReplaceAll(text, profile, "<profile>")
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		text = strings.ReplaceAll(text, home, "<home>")
+	}
+	text = chromeSmokeURL.ReplaceAllString(text, "<url>")
+	text = chromeSmokeEmail.ReplaceAllString(text, "<email>")
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if chromeSmokeSensitive.MatchString(line) {
+			lines[i] = "<sensitive line redacted>"
+		}
+	}
+	text = strings.Join(lines, "\n")
+	// Logs are quoted as well, but remove terminal controls before reporting.
+	text = strings.Map(func(r rune) rune {
+		if r < 32 && r != '\n' && r != '\t' || r == 127 {
+			return -1
+		}
+		return r
+	}, text)
+	if len(text) > chromeSmokeOutputLimit {
+		text = text[len(text)-chromeSmokeOutputLimit:]
+	}
+	return text
+}
+
+func logChromeSmokeBinary(t *testing.T, binary string) {
+	t.Helper()
+	real, err := filepath.EvalSymlinks(binary)
+	t.Logf("Chrome selection: binary=%q resolved=%q resolve_error=%v override=%t", binary, real, err, os.Getenv("TAPEFOX_BROWSER") != "")
+	for _, candidate := range chromeCandidates() {
+		if path, err := exec.LookPath(candidate); err == nil {
+			t.Logf("Chrome candidate: name=%q path=%q", candidate, path)
+		}
+	}
+	if f, err := os.Open(binary); err == nil {
+		var prefix [2]byte
+		_, readErr := f.Read(prefix[:])
+		_ = f.Close()
+		t.Logf("Chrome selected binary: script_wrapper=%t header_error=%v", string(prefix[:]) == "#!", readErr)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	output := &chromeSmokeOutput{}
+	cmd := exec.CommandContext(ctx, binary, "--version")
+	cmd.Stdout, cmd.Stderr, cmd.WaitDelay = output, output, time.Second
+	err = cmd.Run()
+	t.Logf("Chrome executable version: output=%q error=%v context=%v", output.text(""), err, ctx.Err())
+}
+
+type chromeSmokeRPC struct {
+	t     *testing.T
+	pipe  *pipe
+	stage string
+}
+
+func (c *chromeSmokeRPC) call(ctx context.Context, session, method string, params, result any) error {
+	c.t.Helper()
+	c.stage = method
+	start := time.Now()
+	c.t.Log("Chrome RPC begin:", method)
+	err := c.pipe.call(ctx, session, method, params, result)
+	c.t.Logf("Chrome RPC end: method=%s elapsed=%s error=%v context=%v", method, time.Since(start).Round(time.Millisecond), err, ctx.Err())
+	return err
+}
+
+func TestChromeSmokeDiagnosticOutput(t *testing.T) {
+	var output chromeSmokeOutput
+	_, _ = output.Write([]byte(strings.Repeat("x", chromeSmokeOutputLimit*2)))
+	_, _ = output.Write([]byte("\nRPC failed /synthetic/profile https://example.invalid/path?private=synthetic user@example.invalid\nauthorization: synthetic-private-value\n\x1bChrome crashed\n"))
+	text := output.text("/synthetic/profile")
+	if len(text) > chromeSmokeOutputLimit || len(output.tail) > chromeSmokeOutputLimit {
+		t.Fatal("diagnostic output exceeded its bound")
+	}
+	for _, forbidden := range []string{"/synthetic/profile", "example.invalid", "synthetic-private-value", "\x1b"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("diagnostic output retained %q", forbidden)
+		}
+	}
+	for _, expected := range []string{"<profile>", "<url>", "<email>", "Chrome crashed"} {
+		if !strings.Contains(text, expected) {
+			t.Fatalf("diagnostic output lost %q", expected)
+		}
 	}
 }

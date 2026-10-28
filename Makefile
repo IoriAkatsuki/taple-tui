@@ -1,5 +1,7 @@
 PACKAGE_ROOT := $(CURDIR)
 BUILD_SCRIPT := $(PACKAGE_ROOT)/hack/build.sh
+VERSION ?= $(shell git describe --tags --always --dirty=-dev 2>/dev/null || printf dev)
+export VERSION
 
 .PHONY: build install rpm package test lint lint-fix vendor
 

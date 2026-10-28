@@ -87,7 +87,7 @@ type AppleMusicPage struct {
 	operations                            []appleOperation
 	generation                            uint64
 	playGeneration, settledPlayGeneration uint64
-	skipAcknowledged, pollEpoch           uint64
+	playAcknowledged, pollEpoch           uint64
 	pending                               bool
 	pendingSince                          time.Time
 	playbackError                         string
@@ -193,7 +193,7 @@ func (p *AppleMusicPage) acceptState(s applemusic.State, now time.Time) {
 		p.glitchAt = now
 	}
 	unchangedSkip := p.pending && (p.lastAction.Kind == "next" || p.lastAction.Kind == "previous") &&
-		p.skipAcknowledged == p.playGeneration && s.Ready && s.Authorized && s.Track.ID != "" &&
+		p.playAcknowledged == p.playGeneration && s.Ready && s.Authorized && s.Track.ID != "" &&
 		s.Track.ID == p.previousID && s.QueueIndex == p.pendingIndex
 	if unchangedSkip {
 		p.pending, p.pendingSince = false, time.Time{}
@@ -246,7 +246,10 @@ func (p *AppleMusicPage) matchesPlaybackTarget(s applemusic.State) bool {
 		return false
 	}
 	if p.pendingID == "" {
-		return s.Track.ID != p.previousID || s.QueueIndex != p.pendingIndex
+		// A successful whole-collection replay can keep the same first track.
+		// Only a fresh full playback state after this acknowledgement confirms it.
+		return s.Track.ID != p.previousID || s.QueueIndex != p.pendingIndex ||
+			(p.lastAction.Kind == "play-collection" && p.playAcknowledged == p.playGeneration)
 	}
 	if s.Track.ID != p.pendingID && (p.pendingCatalogID == "" || s.Track.ID != p.pendingCatalogID) {
 		return false

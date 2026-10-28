@@ -21,7 +21,8 @@ type Browser struct {
 	cmd                 *exec.Cmd
 	exited              chan struct{}
 	close               sync.Once
-	mu                  sync.Mutex
+	sessionOnce         sync.Once
+	sessionGate         chan struct{}
 	target              string
 	session             string
 	lifecycle           sync.RWMutex
@@ -135,8 +136,17 @@ func appleOrigin(raw string) bool {
 // sessionForPage rechecks the target URL before every evaluation; login popups
 // and other tabs are never evaluated, even when they belong to this process.
 func (b *Browser) sessionForPage(ctx context.Context) (string, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	// Keep session discovery serial without extending a caller's deadline.
+	b.sessionOnce.Do(func() { b.sessionGate = make(chan struct{}, 1) })
+	select {
+	case b.sessionGate <- struct{}{}:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	defer func() { <-b.sessionGate }()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	var targets struct {
 		TargetInfos []struct{ TargetID, Type, URL string }
 	}

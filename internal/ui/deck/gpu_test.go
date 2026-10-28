@@ -73,6 +73,7 @@ func TestGPUWalkmanMatchesCPU(t *testing.T) {
 				}
 				mae := total / float64(v.W*v.H*gc*gr*3)
 				if coverage > 2 || mae > .8 {
+					logGPUParityDiagnostics(t, g, v, pose, st, a, b, phase, "baseline")
 					t.Fatalf("%v style=%d phase=%d: coverage delta=%d color MAE=%.3f", tier, style, phase, coverage, mae)
 				}
 			}

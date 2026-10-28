@@ -9,7 +9,7 @@ on:
       version:
         description: Version embedded in the binary and archive name
         required: true
-        default: v1.1.0
+        default: v1.2.0
         type: string
 
 permissions:
@@ -22,7 +22,7 @@ concurrency:
 env:
   CGO_ENABLED: "1"
   GOTOOLCHAIN: local
-  VERSION: ${{ inputs.version || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || 'v1.1.0' }}
+  VERSION: ${{ inputs.version || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || 'v1.2.0' }}
 
 jobs:
   build:
@@ -102,6 +102,8 @@ jobs:
           go version
       - name: Run all tests
         if: runner.os != 'Windows'
+        env:
+          TAPEFOX_GPU_DIAGNOSTICS_DIR: ${{ runner.temp }}/taple-gpu-evidence
         run: go test ./...
       - name: Test Windows from PowerShell
         if: runner.os == 'Windows'
@@ -114,10 +116,16 @@ jobs:
       - name: Diagnose failed native Metal startup
         if: failure() && runner.os == 'macOS'
         timeout-minutes: 4
+        env:
+          TAPEFOX_GPU_DIAGNOSTICS_DIR: ${{ runner.temp }}/taple-gpu-evidence
+          TAPEFOX_GPU_DIAGNOSTICS: "1"
         run: |
           system_profiler SPDisplaysDataType
+          status=0
           go test -v ./internal/ui/deck/metalcompute ./internal/ui/deck \
-            -run '^(TestMetalRoundTripAndClose|TestGPUWalkmanMatchesCPU)$' -count=1 -timeout=60s
+            -run '^(TestMetalRoundTripAndClose|TestGPUWalkmanMatchesCPU)$' -count=1 -timeout=90s || status=$?
+          go test -v ./internal/ui/deck -run '^TestMetalNormalizeDiagnostic$' -count=1 -timeout=90s || status=$?
+          exit "$status"
       - name: Run concurrency regressions
         run: go test -race ./internal/applemusic ./internal/ui
       - name: Verify private Chrome pipe without login or music
@@ -125,6 +133,27 @@ jobs:
           TAPEFOX_CHROME_SMOKE: "1"
           TAPEFOX_BROWSER_CAPABILITIES: "1"
         run: go test -v ./internal/applemusic -run '^TestChromePrivatePipeSmoke$' -count=1
+      - name: Diagnose failed Linux browser runtime
+        if: failure() && runner.os == 'Linux'
+        timeout-minutes: 4
+        env:
+          TAPEFOX_CHROME_SMOKE: "1"
+        run: |
+          status=0
+          go test -v ./internal/applemusic -run '^TestChromePrivatePipeSmoke$' -count=1 -timeout=60s || status=$?
+          if command -v google-chrome >/dev/null; then
+            TAPEFOX_BROWSER="$(command -v google-chrome)" TAPEFOX_BROWSER_CAPABILITIES=1 \
+              go test -v ./internal/applemusic -run '^TestChromePrivatePipeSmoke$' -count=1 -timeout=60s || status=$?
+          fi
+          exit "$status"
+      - name: Upload native rendering diagnostics
+        if: failure() && runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: gpu-diagnostics-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/taple-gpu-evidence
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Check physical GPU parity or report unavailable hardware
         run: go test -v ./internal/ui/deck -run '^TestGPUWalkmanMatchesCPU$' -count=1
 

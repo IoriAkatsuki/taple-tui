@@ -70,3 +70,18 @@ func TestCLIHasNoLegacyPlaybackDependencies(t *testing.T) {
 		}
 	}
 }
+
+func TestCookieImportOptionRemainsAnAppleMusicOperation(t *testing.T) {
+	for _, args := range [][]string{{"tapefox", "--import-cookies", "synthetic.json"}, {"tapefox", "apple-music", "--import-cookies", "synthetic.json"}} {
+		app := newCLI()
+		app.Args = args
+		called := false
+		app.Commands()["apple-music"].Func = func(_ *gcli.Command, _ []string) error {
+			called = true
+			return nil
+		}
+		if code := app.Run(); code != 0 || !called {
+			t.Fatalf("cookie import must use the existing player: code=%d called=%v", code, called)
+		}
+	}
+}

@@ -124,3 +124,16 @@ func TestCookieImportRejectsControlBytesInPath(t *testing.T) {
 		t.Fatal("control byte in path accepted")
 	}
 }
+
+func TestCookieImportRejectsWindowsNetworkAndDevicePaths(t *testing.T) {
+	for _, path := range []string{`\\server\share\cookies.json`, `\\?\UNC\server\share\cookies.json`, `\\.\pipe\cookies`, `//server/share/cookies.json`} {
+		if localCookiePath(path) {
+			t.Fatal("network/device cookie path accepted")
+		}
+	}
+	for _, path := range []string{`C:\private\cookies.json`, `cookies.json`} {
+		if !localCookiePath(path) {
+			t.Fatal("ordinary local cookie path rejected")
+		}
+	}
+}

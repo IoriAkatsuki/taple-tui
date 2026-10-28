@@ -248,3 +248,7 @@ func normalizeCookie(entry exportedCookie, now time.Time) (cookieParam, string, 
 	key := domain + "\x00" + c.Path + "\x00" + c.Name
 	return c, key, c.Expires != nil && *c.Expires <= float64(now.Unix()), nil
 }
+
+func localCookiePath(path string) bool {
+	return !strings.HasPrefix(strings.ReplaceAll(path, "/", `\`), `\\`)
+}

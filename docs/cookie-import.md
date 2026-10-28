@@ -33,7 +33,7 @@ Set-Acl -LiteralPath $file -AclObject $acl
 .\taple-tui.exe --import-cookies $file
 ```
 
-导入通过打开的文件句柄检查属主、ACL 和 reparse 属性，不接受共享读取权限、目录或最终路径的 reparse point。
+导入通过打开的文件句柄检查属主、ACL 和 reparse 属性，不接受共享读取权限、目录、UNC 网络路径、设备路径或最终路径的 reparse point。
 
 ## 支持的格式与范围
 

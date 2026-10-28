@@ -11,6 +11,9 @@ import (
 )
 
 func openCookieFile(path string) (*os.File, error) {
+	if !localCookiePath(path) {
+		return nil, errors.New("cookie input must be a local file, not a network or device path")
+	}
 	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil, err

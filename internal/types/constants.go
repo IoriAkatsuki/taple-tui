@@ -5,8 +5,8 @@ var (
 	BuildTags  = ""
 )
 
-const AppName = "taple-tui"
-const AppDescription = "Desktop Apple Music Walkman TUI"
+const AppName = "taple"
+const AppDescription = "taple — Apple Music cassette TUI"
 const AppRepo = "IoriAkatsuki/taple-tui"
 const AppGithubUrl = "https://github.com/" + AppRepo
 const AppIssueUrl = AppGithubUrl + "/issues/new?template=1_bug_report.yml"

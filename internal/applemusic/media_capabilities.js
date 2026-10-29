@@ -6,7 +6,7 @@ async (request) => {
     if (!mk.isAuthorized) return {error:'login'};
   }
   if (request.skipIfPlaying && globalThis.MusicKit?.getInstance()?.isPlaying) return {data:{playing:true}};
-  const key = Symbol.for('tapefox.mediaCapabilities');
+  const key = Symbol.for('taple.mediaCapabilities');
   let cached = globalThis[key];
   if (!cached || Date.now() >= cached.expires) {
     cached = {expires:Date.now() + 5000};

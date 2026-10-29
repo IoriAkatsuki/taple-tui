@@ -244,9 +244,9 @@ func TestWalkmanFitAndSmallFrames(t *testing.T) {
 }
 
 func TestWalkmanPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_PREVIEW_DIR to export real framebuffer previews")
+		t.Skip("set TAPLE_PREVIEW_DIR to export real framebuffer previews")
 	}
 	for _, tt := range []struct {
 		name string

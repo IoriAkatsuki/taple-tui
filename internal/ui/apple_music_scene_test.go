@@ -238,9 +238,9 @@ func TestAppleMusicLocalZoomDoesNotReflowOtherColumn(t *testing.T) {
 }
 
 func TestAppleMusicScenePreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_SCENE_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_SCENE_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_SCENE_PREVIEW_DIR for actual framebuffer fixtures")
+		t.Skip("set TAPLE_SCENE_PREVIEW_DIR for actual framebuffer fixtures")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)

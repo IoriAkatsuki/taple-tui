@@ -289,7 +289,7 @@ func TestAppleMusicSwapFramebuffersAndResizes(t *testing.T) {
 					t.Fatalf("swap overflow at %v / %d", size, ms)
 				}
 			}
-			if dir := os.Getenv("TAPEFOX_SWAP_PREVIEW_DIR"); dir != "" {
+			if dir := os.Getenv("TAPLE_SWAP_PREVIEW_DIR"); dir != "" {
 				if err := os.MkdirAll(dir, 0700); err != nil {
 					t.Fatal(err)
 				}

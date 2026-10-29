@@ -12,7 +12,7 @@ func TestPathsPreserveExistingConfigLocationAndPureIsolation(t *testing.T) {
 	t.Cleanup(func() { pureRoot = previous })
 	pureRoot = ""
 	root := t.TempDir()
-	t.Setenv("MUSICFOX_ROOT", root)
+	t.Setenv("TAPLE_ROOT", root)
 	if got := ConfigFilePath(); got != filepath.Join(root, "config.toml") {
 		t.Fatalf("portable configuration: %s", got)
 	}
@@ -34,7 +34,7 @@ func TestXDGPathsDoNotCreateLegacyDataDirectories(t *testing.T) {
 	t.Cleanup(func() { pureRoot = previous })
 	pureRoot = ""
 	root := t.TempDir()
-	t.Setenv("MUSICFOX_ROOT", "")
+	t.Setenv("TAPLE_ROOT", "")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
 	configRoot := filepath.Join(root, "config")

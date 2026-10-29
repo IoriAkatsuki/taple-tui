@@ -22,13 +22,10 @@ if [[ ! "$VERSION" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+-]*$ ]]; then
 	echo "VERSION must contain only letters, digits, dots, underscores, plus or minus" >&2
 	exit 1
 fi
-TARGET=${BUILD_TARGET:-$ROOT/bin/taple-tui}
+TARGET=${BUILD_TARGET:-$ROOT/bin/taple}
 LDFLAGS="${LDFLAGS:-} -X github.com/go-musicfox/go-musicfox/internal/types.AppVersion=$VERSION"
 mkdir -p "$(dirname "$TARGET")"
 CGO_ENABLED=${CGO_ENABLED:-1} GOOS="$BUILD_GOOS" "$GOBINARY" build -trimpath -buildvcs=false -ldflags "$LDFLAGS" -o "$TARGET" "$ROOT/cmd"
-if [[ -z "${BUILD_TARGET:-}" ]]; then
-	ln -sf taple-tui "$ROOT/bin/tapefox"
-fi
 
 if [[ "$ACTION" == install ]]; then
 	destination=$("$GOBINARY" env GOBIN)
@@ -37,6 +34,5 @@ if [[ "$ACTION" == install ]]; then
 		destination=${destination%%:*}/bin
 	fi
 	mkdir -p "$destination"
-	install -m 755 "$TARGET" "$destination/taple-tui"
-	ln -sf taple-tui "$destination/tapefox"
+	install -m 755 "$TARGET" "$destination/taple"
 fi

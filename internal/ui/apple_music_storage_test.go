@@ -242,9 +242,9 @@ func TestAppleMusicNarrowPickupFinishesExtractionBeforeFlight(t *testing.T) {
 }
 
 func TestAppleMusicStoredHalfPeekAndPickupPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_STORAGE_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_STORAGE_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_STORAGE_PREVIEW_DIR to export closed, half-peek and random pickup frames")
+		t.Skip("set TAPLE_STORAGE_PREVIEW_DIR to export closed, half-peek and random pickup frames")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
@@ -287,9 +287,9 @@ func TestAppleMusicStoredHalfPeekAndPickupPreview(t *testing.T) {
 }
 
 func TestAppleMusicNarrowStoragePreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_STORAGE_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_STORAGE_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_STORAGE_PREVIEW_DIR to export narrow pickup frames")
+		t.Skip("set TAPLE_STORAGE_PREVIEW_DIR to export narrow pickup frames")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)

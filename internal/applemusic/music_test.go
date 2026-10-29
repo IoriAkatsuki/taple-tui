@@ -42,7 +42,7 @@ func runBridge(t *testing.T, setup string, request any) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, node, "--input-type=module", "-")
-	const started = "tapefox-fixture-started\n"
+	const started = "taple-fixture-started\n"
 	marker, _ := json.Marshal(started)
 	cmd.Stdin = strings.NewReader("process.stderr.write(" + string(marker) + ");" + setup + "; console.log(JSON.stringify(await " + script + "));")
 	output, err := cmd.CombinedOutput()
@@ -207,7 +207,7 @@ func TestPlaybackWaitsForLoginHandover(t *testing.T) {
 }
 
 func TestChromeStartsWithoutVisibleWindow(t *testing.T) {
-	if os.Getenv("TAPEFOX_CHROME_HIDDEN") != "1" {
+	if os.Getenv("TAPLE_CHROME_HIDDEN") != "1" {
 		t.Skip("opt-in unified Chromium headless check")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -230,7 +230,7 @@ func TestChromeStartsWithoutVisibleWindow(t *testing.T) {
 // This opt-in check uses the user's dedicated, already authorized profile.
 // It changes only the web player's queue/transport, never library contents.
 func TestAppleMusicBrowserIntegration(t *testing.T) {
-	if os.Getenv("TAPEFOX_APPLEMUSIC_LIVE") != "1" {
+	if os.Getenv("TAPLE_APPLEMUSIC_LIVE") != "1" {
 		t.Skip("requires user-assisted login and permission to exercise playback")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
@@ -317,7 +317,7 @@ func TestAppleMusicBrowserIntegration(t *testing.T) {
 }
 
 func TestAppleMusicLoginHandover(t *testing.T) {
-	if os.Getenv("TAPEFOX_APPLEMUSIC_LOGIN") != "1" {
+	if os.Getenv("TAPLE_APPLEMUSIC_LOGIN") != "1" {
 		t.Skip("user-assisted login handover")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)

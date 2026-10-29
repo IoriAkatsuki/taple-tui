@@ -220,9 +220,9 @@ func TestAppleMusicCompactPauseSettlesAnimations(t *testing.T) {
 
 // Export the real cell buffer for visual QA, not a separate mockup renderer.
 func TestAppleMusicPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_PREVIEW_DIR to export visual fixtures")
+		t.Skip("set TAPLE_PREVIEW_DIR to export visual fixtures")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
@@ -246,9 +246,9 @@ func TestAppleMusicPreview(t *testing.T) {
 }
 
 func TestAppleMusicAnimationPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_ANIMATION_DIR")
+	dir := os.Getenv("TAPLE_ANIMATION_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_ANIMATION_DIR to export labeled animation fixtures")
+		t.Skip("set TAPLE_ANIMATION_DIR to export labeled animation fixtures")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
@@ -279,9 +279,9 @@ func TestAppleMusicAnimationPreview(t *testing.T) {
 }
 
 func TestAppleMusicStandbyPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_STANDBY_DIR")
+	dir := os.Getenv("TAPLE_STANDBY_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_STANDBY_DIR for idle animation fixtures")
+		t.Skip("set TAPLE_STANDBY_DIR for idle animation fixtures")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
@@ -308,7 +308,7 @@ func writeAppleFrame(t *testing.T, p *AppleMusicPage, path string) {
 	}
 	var out strings.Builder
 	w, h := p.screen.w, p.screen.h
-	fmt.Fprintf(&out, `<!doctype html><meta charset="utf-8"><title>tapefox terminal render fixture</title><style>body{margin:20px;background:#0B0716}#terminal{position:relative;font:16px/20px 'DejaVu Sans Mono',monospace;font-variant-ligatures:none;width:%dpx;height:%dpx}span{position:absolute;white-space:pre;height:20px}</style><div id="terminal">`, w*10, h*20)
+	fmt.Fprintf(&out, `<!doctype html><meta charset="utf-8"><title>taple terminal render fixture</title><style>body{margin:20px;background:#0B0716}#terminal{position:relative;font:16px/20px 'DejaVu Sans Mono',monospace;font-variant-ligatures:none;width:%dpx;height:%dpx}span{position:absolute;white-space:pre;height:20px}</style><div id="terminal">`, w*10, h*20)
 	for y := range h {
 		for x := range w {
 			c := p.screen.buf.CellAt(x, y)

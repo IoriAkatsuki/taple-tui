@@ -45,6 +45,8 @@ func Open(ctx context.Context, profile string) (*Browser, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Keep the existing profile location for saved-login compatibility.
+		// Brand changes must not migrate, clear or rewrite user profile data.
 		profile = filepath.Join(dir, "tapefox", "apple-music", "chrome")
 	}
 	return launchBrowser(ctx, binary, profile, true)

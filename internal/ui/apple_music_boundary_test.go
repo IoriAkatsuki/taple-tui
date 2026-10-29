@@ -282,7 +282,7 @@ func TestAppleMusicBoundaryFramebuffersKeepTheBayClosed(t *testing.T) {
 						t.Fatal("boundary framebuffer overflow")
 					}
 				}
-				if dir := os.Getenv("TAPEFOX_BOUNDARY_PREVIEW_DIR"); dir != "" {
+				if dir := os.Getenv("TAPLE_BOUNDARY_PREVIEW_DIR"); dir != "" {
 					if err := os.MkdirAll(dir, 0700); err != nil {
 						t.Fatal(err)
 					}

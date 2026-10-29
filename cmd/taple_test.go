@@ -11,7 +11,7 @@ import (
 func TestAppleMusicIsTheOnlyPlayerAndDefaultCommand(t *testing.T) {
 	app := newCLI()
 	app.ExitOnEnd = false
-	app.Args = []string{"tapefox"}
+	app.Args = []string{"taple"}
 	if app.HasCommand("netease") {
 		t.Fatal("the legacy player must not be registered")
 	}
@@ -30,7 +30,7 @@ func TestAppleMusicIsTheOnlyPlayerAndDefaultCommand(t *testing.T) {
 }
 
 func TestRemovedVUFlagDoesNotStartPlayer(t *testing.T) {
-	for _, args := range [][]string{{"tapefox", "--vu"}, {"tapefox", "apple-music", "--vu"}} {
+	for _, args := range [][]string{{"taple", "--vu"}, {"taple", "apple-music", "--vu"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			app := newCLI()
 			app.Args = args
@@ -72,7 +72,7 @@ func TestCLIHasNoLegacyPlaybackDependencies(t *testing.T) {
 }
 
 func TestCookieImportOptionRemainsAnAppleMusicOperation(t *testing.T) {
-	for _, args := range [][]string{{"tapefox", "--import-cookies", "synthetic.json"}, {"tapefox", "apple-music", "--import-cookies", "synthetic.json"}} {
+	for _, args := range [][]string{{"taple", "--import-cookies", "synthetic.json"}, {"taple", "apple-music", "--import-cookies", "synthetic.json"}} {
 		app := newCLI()
 		app.Args = args
 		called := false

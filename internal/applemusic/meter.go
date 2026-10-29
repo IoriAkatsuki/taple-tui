@@ -37,7 +37,7 @@ func OpenMeter(ctx context.Context) (*Meter, error) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	// The default capture buffer arrives in multi-second bursts, not live meter frames.
-	cmd := exec.CommandContext(ctx, "parec", "--raw", "--device=@DEFAULT_MONITOR@", "--format=float32le", "--rate=24000", "--channels=2", "--latency-msec=50", "--client-name=tapefox", "--stream-name=Apple Music system-output VU")
+	cmd := exec.CommandContext(ctx, "parec", "--raw", "--device=@DEFAULT_MONITOR@", "--format=float32le", "--rate=24000", "--channels=2", "--latency-msec=50", "--client-name=taple", "--stream-name=Apple Music system-output VU")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()

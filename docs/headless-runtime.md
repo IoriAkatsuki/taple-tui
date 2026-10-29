@@ -1,6 +1,6 @@
 # 独立无头运行时与原生 Metal（开发版）
 
-本页描述当前源码，不表示已发布的 v1.1.0 已更新，也不表示已完成三平台 DRM 播放验证。
+本页操作示例针对当前 `refactor/taple-identity` 分支，使用 `taple` 与 `TAPLE_*`；本轮命名变更尚未发布，迁移规则见 [命名说明](naming.md)。不表示已发布的 v1.1.0 已包含无头运行时与原生 Metal 改动，也不表示已完成三平台 DRM 播放验证。下方实测与验证记录保留改名前的结论，不代表本次更名已重新执行这些测试。
 
 ## Chromium、FFmpeg 与 DRM 的边界
 
@@ -15,7 +15,7 @@
 可先指定兼容的 Chromium 可执行文件（路径包含空格时正常引用，不要附加命令行参数）：
 
 ```sh
-TAPEFOX_BROWSER=TARGET ./bin/taple-tui
+TAPLE_BROWSER=TARGET ./bin/taple
 ```
 
 将 `TARGET` 替换为运行时可执行文件的绝对路径。也可把**完整运行时目录**放在播放器可执行文件旁边：
@@ -41,17 +41,17 @@ macOS:   runtime/chromium/Chromium.app/Contents/MacOS/Chromium
 Linux/macOS 的前两层检查：
 
 ```sh
-TAPEFOX_BROWSER=TARGET \
-TAPEFOX_CHROME_SMOKE=1 TAPEFOX_BROWSER_CAPABILITIES=1 \
+TAPLE_BROWSER=TARGET \
+TAPLE_CHROME_SMOKE=1 TAPLE_BROWSER_CAPABILITIES=1 \
 go test -v ./internal/applemusic -run '^TestChromePrivatePipeSmoke$' -count=1
 ```
 
-可额外设 `TAPEFOX_REQUIRE_WIDEVINE=1`，让能力不足直接判失败。媒体探测保留浏览器正常的组件注册/更新路径；仅做 IPC 测试时才禁用后台网络及组件更新。Windows/macOS 的预装 CDM 也通过组件更新器注册，禁用它会产生假阴性。测试会为异步注册短暂重试，但不无限等待组件下载。
+可额外设 `TAPLE_REQUIRE_WIDEVINE=1`，让能力不足直接判失败。媒体探测保留浏览器正常的组件注册/更新路径；仅做 IPC 测试时才禁用后台网络及组件更新。Windows/macOS 的预装 CDM 也通过组件更新器注册，禁用它会产生假阴性。测试会为异步注册短暂重试，但不无限等待组件下载。
 
 `AAC="probably"` 仅是浏览器声明，`Widevine=true` 也只表示能协商该配置，不证明获得 Apple Music 许可证或成功出声。全曲集成测试需用户先登录并明确选择执行：
 
 ```sh
-TAPEFOX_APPLEMUSIC_LIVE=1 go test -v ./internal/applemusic -run '^TestAppleMusicBrowserIntegration$' -count=1
+TAPLE_APPLEMUSIC_LIVE=1 go test -v ./internal/applemusic -run '^TestAppleMusicBrowserIntegration$' -count=1
 ```
 
 ## 点歌后有歌词，但一直加载
@@ -76,11 +76,13 @@ TAPEFOX_APPLEMUSIC_LIVE=1 go test -v ./internal/applemusic -run '^TestAppleMusic
 
 因此，**无限加载的界面问题已修复并经过测试，已有通过无头媒体能力检查的运行时，但实际全曲播放尚未恢复验证**。FFmpeg 的开源 AAC 解码器不能替代 CDM。部署时需要在所选无头运行时中确认 AAC/EME 能力，再用本人订阅单独验证实际播放；不能静默退回可见 Chrome，也不能把不同浏览器的登录 profile 直接混用。
 
-如需账户无关的官方页面能力检查，可显式运行：
+### 当前分支复测命令
+
+如需账户无关的官方页面能力检查，可显式运行（以下新键名不表示上述历史测试已用新环境变量重跑）：
 
 ```powershell
-$env:TAPEFOX_BROWSER = 'TARGET'
-$env:TAPEFOX_MEDIA_PREFLIGHT_SMOKE = '1'
+$env:TAPLE_BROWSER = 'TARGET'
+$env:TAPLE_MEDIA_PREFLIGHT_SMOKE = '1'
 go test -v ./internal/applemusic -run '^TestAppleMusicOriginMediaCapabilities$' -count=1
 ```
 
@@ -96,13 +98,15 @@ Darwin 选择 `Metal.framework` + `Foundation.framework`，使用 `MTLCreateSyst
 
 ```sh
 CGO_ENABLED=1 go test ./...
-CGO_ENABLED=1 TAPEFOX_REQUIRE_GPU=1 go test -v ./internal/ui/deck/... \
+CGO_ENABLED=1 TAPLE_REQUIRE_GPU=1 go test -v ./internal/ui/deck/... \
   -run '^(TestGPUWalkmanMatchesCPU|TestGPUCloseRejectsFurtherWork|TestMetalRoundTripAndClose)$' -count=1
 ```
 
 无 Metal 设备或未启用 CGO 时明确回退 CPU；原生着色器/管线错误不应被测试误报为“缺少硬件而跳过”。Windows/Linux 继续使用 Vulkan。Vulkan 是开放标准，驱动并非都开源；Darwin 内核也不自带 Vulkan 实现。
 
-## 本次本地验证范围
+## 既往本地验证范围（命名变更前）
+
+以下保留原运行时与播放修复的测试记录；不是本次 `taple` / `TAPLE_*` 更名的验证结果。
 
 - Windows 原生 `go test ./...`、`go vet ./...`、播放器/渲染相关 `-race` 测试通过；实际 Intel Arc GPU 的 CPU/GPU 帧一致性和关闭回退测试通过。
 - `CGO_ENABLED=0` 全量测试及 Linux amd64、Darwin arm64/amd64 交叉构建通过；这些是 CPU 构建，**不验证原生 Metal 的编译或运行**。

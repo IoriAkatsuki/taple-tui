@@ -18,7 +18,7 @@ func TestRecoverIgnore(t *testing.T) {
 func TestFormatCrashReport(t *testing.T) {
 	msg := formatCrashReport(errors.New("boom"))
 	for _, want := range []string{
-		"musicfox 发生未预期的错误",
+		"taple 发生未预期的错误",
 		"错误: boom",
 		"issues/new?template=1_bug_report.yml",
 		"日志",

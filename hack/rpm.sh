@@ -17,6 +17,6 @@ version="${base}^$(git log -1 --date=format:%Y%m%d --format=%cd)git$(git rev-par
 top=$(mktemp -d)
 trap 'rm -rf "$top"' EXIT
 mkdir -p "$top/SOURCES" dist
-cp bin/taple-tui LICENSE README.md README.en.md deploy/taple-tui.desktop "$top/SOURCES/"
-rpmbuild -bb --quiet --define "_topdir $top" --define "deck_version $version" deploy/rpm/taple-tui.spec
+cp bin/taple LICENSE README.md README.en.md deploy/taple.desktop "$top/SOURCES/"
+rpmbuild -bb --quiet --define "_topdir $top" --define "deck_version $version" deploy/rpm/taple.spec
 find "$top/RPMS" -name '*.rpm' -exec cp {} dist/ \; -exec basename {} \;

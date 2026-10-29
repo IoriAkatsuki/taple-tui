@@ -194,9 +194,9 @@ func exportSwapSettingsGIFSequence(t *testing.T, dir string) {
 }
 
 func TestAppleMusicHighFPSGIFExport(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_GIF_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_GIF_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_GIF_PREVIEW_DIR to export 33.33fps (30ms step) animation frames")
+		t.Skip("set TAPLE_GIF_PREVIEW_DIR to export 33.33fps (30ms step) animation frames")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)

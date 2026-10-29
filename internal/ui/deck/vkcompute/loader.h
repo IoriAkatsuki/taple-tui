@@ -1,5 +1,5 @@
-#ifndef TAPEFOX_LOADER_H
-#define TAPEFOX_LOADER_H
+#ifndef TAPLE_LOADER_H
+#define TAPLE_LOADER_H
 #ifndef VK_NO_PROTOTYPES
 #define VK_NO_PROTOTYPES
 #endif

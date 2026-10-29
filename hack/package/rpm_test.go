@@ -25,7 +25,7 @@ func TestRPMPrereleaseVersionKeepsBinaryVersion(t *testing.T) {
 			root := t.TempDir()
 			files := map[string]string{
 				"hack/rpm.sh": string(script), "LICENSE": "license", "README.md": "readme", "README.en.md": "readme",
-				"deploy/taple-tui.desktop": "desktop",
+				"deploy/taple.desktop": "desktop",
 				"tools/git": `#!/bin/sh
 case "$1" in
   describe) printf '%s\n' "$RPM_TEST_TAG" ;;
@@ -38,7 +38,7 @@ esac
 set -eu
 test "$1" = build
 mkdir -p bin
-printf '%s' "$VERSION" > bin/taple-tui
+printf '%s' "$VERSION" > bin/taple
 `,
 				"tools/rpmbuild": `#!/bin/sh
 set -eu
@@ -50,7 +50,7 @@ for arg do
 done
 case "$version" in *-*) echo 'RPM Version cannot contain hyphens' >&2; exit 1 ;; esac
 mkdir -p "$top/RPMS"
-printf '%s' "$version" > "$top/RPMS/taple-tui.rpm"
+printf '%s' "$version" > "$top/RPMS/taple.rpm"
 `,
 			}
 			for name, data := range files {
@@ -69,8 +69,8 @@ printf '%s' "$version" > "$top/RPMS/taple-tui.rpm"
 				t.Fatalf("RPM script failed: %v\n%s", err, out)
 			}
 			for file, want := range map[string]string{
-				"dist/taple-tui.rpm": tc.version + "^20261027gitabc123",
-				"bin/taple-tui":      "v1.1.0-rc.1-custom",
+				"dist/taple.rpm": tc.version + "^20261027gitabc123",
+				"bin/taple":      "v1.1.0-rc.1-custom",
 			} {
 				got, err := os.ReadFile(filepath.Join(root, file))
 				if err != nil || string(got) != want {

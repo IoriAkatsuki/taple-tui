@@ -108,7 +108,7 @@ func TestClearOwnedProfileRejectsReplacedOrUnknownDirectories(t *testing.T) {
 }
 
 func TestChromeLogoutReplacesOnlyItsOwnTemporarySession(t *testing.T) {
-	if os.Getenv("TAPEFOX_CHROME_LOGOUT") != "1" {
+	if os.Getenv("TAPLE_CHROME_LOGOUT") != "1" {
 		t.Skip("opt-in Chrome test with a disposable profile; never the user's account")
 	}
 	binary, err := findChrome()
@@ -123,7 +123,7 @@ func TestChromeLogoutReplacesOnlyItsOwnTemporarySession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	marker := filepath.Join(profile, "tapefox-synthetic-session")
+	marker := filepath.Join(profile, "taple-synthetic-session")
 	if err := os.WriteFile(marker, []byte("synthetic; no credentials"), 0600); err != nil {
 		t.Fatal(err)
 	}

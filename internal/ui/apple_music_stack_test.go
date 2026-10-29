@@ -202,9 +202,9 @@ func TestAppleMusicReplacementRequestDoesNotWaitForAnimation(t *testing.T) {
 }
 
 func TestAppleMusicStackReplacementPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_STACK_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_STACK_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_STACK_PREVIEW_DIR to export stacked popup and old/new handoffs")
+		t.Skip("set TAPLE_STACK_PREVIEW_DIR to export stacked popup and old/new handoffs")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)

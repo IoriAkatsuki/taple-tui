@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=taple-tui
+Name=taple
 GenericName=Apple Music Terminal Deck
 GenericName[zh_CN]=Apple Music 终端磁带卡座
 Comment=Apple Music in a Linux desktop terminal with a classic Walkman deck renderer
 Comment[zh_CN]=面向 Linux 桌面的 Apple Music 经典蓝银 Walkman 终端播放器
-Exec=taple-tui
+Exec=taple
 Terminal=true
 Categories=AudioVideo;Audio;Player;ConsoleOnly;
-Keywords=music;apple;applemusic;walkman;cassette;deck;tui;taple;tapefox;
+Keywords=music;apple;applemusic;walkman;cassette;deck;tui;taple;
 StartupNotify=false

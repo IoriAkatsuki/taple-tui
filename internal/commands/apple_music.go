@@ -47,7 +47,7 @@ func NewAppleMusicCommand() *gcli.Command {
 			var profile string
 			if GlobalOptions.PureMode {
 				var err error
-				profile, err = os.MkdirTemp("", "tapefox-apple-music-*")
+				profile, err = os.MkdirTemp("", "taple-apple-music-*")
 				if err != nil {
 					return err
 				}
@@ -67,7 +67,7 @@ func NewAppleMusicCommand() *gcli.Command {
 			page := ui.NewAppleMusicPage(browser)
 			defer page.Close()
 			opts := model.DefaultOptions()
-			opts.AppName = "taple-tui / Apple Music"
+			opts.AppName = "taple / Apple Music"
 			opts.EnableStartup = false
 			opts.InitPage = page
 			opts.Motion.Level = motion.ParseLevel(configs.AppConfig.Main.Motion)

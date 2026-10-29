@@ -26,7 +26,7 @@ try {
     if ($Version -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._+-]*$') {
         throw "VERSION must contain only letters, digits, dots, underscores, plus or minus."
     }
-    if (-not $BuildTarget) { $BuildTarget = Join-Path $root "bin/taple-tui.exe" }
+    if (-not $BuildTarget) { $BuildTarget = Join-Path $root "bin/taple.exe" }
     $BuildTarget = [IO.Path]::GetFullPath($BuildTarget)
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $BuildTarget) | Out-Null
     if (-not $env:CGO_ENABLED) { $env:CGO_ENABLED = "1" }
@@ -44,7 +44,7 @@ try {
             $destination = Join-Path $firstGoPath "bin"
         }
         New-Item -ItemType Directory -Force -Path $destination | Out-Null
-        Copy-Item -LiteralPath $BuildTarget -Destination (Join-Path $destination "taple-tui.exe")
+        Copy-Item -LiteralPath $BuildTarget -Destination (Join-Path $destination "taple.exe")
     }
 } finally {
     Pop-Location

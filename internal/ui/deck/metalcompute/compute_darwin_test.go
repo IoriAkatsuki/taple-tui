@@ -15,7 +15,7 @@ kernel void main0(device const float *p [[buffer(0)]], device float4 *out [[buff
   if (i < uint(p[0])) out[i] = float4(float(i), p[1], p[2], 1.0);
 }`)
 	if err != nil {
-		if !errors.Is(err, ErrUnavailable) || os.Getenv("TAPEFOX_REQUIRE_GPU") == "1" {
+		if !errors.Is(err, ErrUnavailable) || os.Getenv("TAPLE_REQUIRE_GPU") == "1" {
 			t.Fatal(err)
 		}
 		t.Skip(err)

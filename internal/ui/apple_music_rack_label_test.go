@@ -61,7 +61,7 @@ func TestAppleMusicPoppedTrackKeepsLightTitle(t *testing.T) {
 						if index == 0 && !strings.Contains(row.String(), "▶") {
 							t.Fatal("selected title lost the playing marker")
 						}
-						if dir := os.Getenv("TAPEFOX_LABEL_PREVIEW_DIR"); dir != "" && !hover && level == motion.Full {
+						if dir := os.Getenv("TAPLE_LABEL_PREVIEW_DIR"); dir != "" && !hover && level == motion.Full {
 							if err := os.MkdirAll(dir, 0700); err != nil {
 								t.Fatal(err)
 							}

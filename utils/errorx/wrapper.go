@@ -13,7 +13,7 @@ import (
 )
 
 // childEnv 标记包装进程的子进程。
-const childEnv = "MUSICFOX_INTERNAL_CHILD"
+const childEnv = "TAPLE_INTERNAL_CHILD"
 
 // RunWrapped 以包装进程方式运行应用本体：
 //   - 子进程（app）退出码为 2（Go 运行时 fatal，如 cgo/purego 崩溃）时，
@@ -67,7 +67,7 @@ func RunWrapped(app func()) {
 // 输出走 stdout/stderr（包装进程未被重定向），终端直接可见。
 func printWrapperCrashHint(code int) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "\nmusicfox 异常退出（退出码 %d），可能发生了未预期的错误。\n\n", code)
+	fmt.Fprintf(&b, "\ntaple 异常退出（退出码 %d），可能发生了未预期的错误。\n\n", code)
 	fmt.Fprintf(&b, "错误详情已写入日志: %s\n", slogx.ResolveLogFilePath())
 	if tail := logTail(slogx.ResolveLogFilePath(), 8); len(tail) > 0 {
 		b.WriteString("\n日志尾部:\n")

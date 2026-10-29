@@ -20,9 +20,9 @@ import (
 var levelVar slog.LevelVar
 
 // LogFileName 日志文件名
-const LogFileName = "musicfox.log"
+const LogFileName = "taple.log"
 
-// maxLogFileSize 日志文件超过该大小后，启动时轮转为 musicfox.log.old
+// maxLogFileSize 日志文件超过该大小后，启动时轮转为 taple.log.old
 const maxLogFileSize = 10 << 20 // 10 MiB
 
 var (
@@ -121,6 +121,6 @@ func writeBanner(f *os.File) {
 	if types.BuildTags != "" {
 		version += " [" + types.BuildTags + "]"
 	}
-	_, _ = fmt.Fprintf(f, "==== musicfox %s %s/%s started at %s, log: %s ====\n",
+	_, _ = fmt.Fprintf(f, "==== taple %s %s/%s started at %s, log: %s ====\n",
 		version, runtime.GOOS, runtime.GOARCH, time.Now().Format(time.RFC3339), logPath)
 }

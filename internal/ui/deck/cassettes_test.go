@@ -51,7 +51,7 @@ func TestCassetteStylesRenderDistinct(t *testing.T) {
 				t.Errorf("%s and %s differ in only %d/%d cells", style.Name, CassetteStyles[j].Name, different, len(frame.Cells))
 			}
 		}
-		if dir := os.Getenv("TAPEFOX_PREVIEW_DIR"); dir != "" {
+		if dir := os.Getenv("TAPLE_PREVIEW_DIR"); dir != "" {
 			writeCassettePreview(t, filepath.Join(dir, fmt.Sprintf("cassette-%d-%s.html", i+1, strings.ToLower(style.Name))), style.Name, frame)
 		}
 	}

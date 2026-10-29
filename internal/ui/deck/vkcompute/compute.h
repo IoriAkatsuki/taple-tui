@@ -1,5 +1,5 @@
-#ifndef TAPEFOX_COMPUTE_H
-#define TAPEFOX_COMPUTE_H
+#ifndef TAPLE_COMPUTE_H
+#define TAPLE_COMPUTE_H
 #include <stddef.h>
 #include <stdint.h>
 typedef struct tf_gpu tf_gpu;

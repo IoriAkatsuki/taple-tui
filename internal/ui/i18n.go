@@ -74,7 +74,7 @@ var i18nCatalog = map[string]i18nEntry{
 	"account.signed_in":      {"Signed In · b Account", "已登录 · b 账户"},
 	"account.connecting":     {"Connecting · b Sign In", "连接中 · b 登录"},
 	"account.clear_title":    {"CLEAR LOCAL LOGIN?", "清空本机登录？"},
-	"account.clear_body":     {"Stops playback and clears tapefox's Chrome login.\nYou must sign in again.\nOther browsers and cloud library stay unchanged.", "停止播放，清空 tapefox 专用浏览器的本机登录数据。\n之后必须重新登录。\n不影响其他浏览器、云端资料库或播放器设置。"},
+	"account.clear_body":     {"Stops playback and clears taple's Chrome login.\nYou must sign in again.\nOther browsers and cloud library stay unchanged.", "停止播放，清空 taple 专用浏览器的本机登录数据。\n之后必须重新登录。\n不影响其他浏览器、云端资料库或播放器设置。"},
 	"account.clear_key":      {"B Clear login", "B 清空登录"},
 	"account.cancel":         {"Esc Cancel", "Esc 取消"},
 	"account.confirm":        {"y Clear & sign out", "y 清空并退出"},

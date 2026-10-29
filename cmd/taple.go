@@ -8,7 +8,7 @@ import (
 	"github.com/go-musicfox/go-musicfox/internal/commands"
 	"github.com/go-musicfox/go-musicfox/internal/configs"
 	"github.com/go-musicfox/go-musicfox/internal/types"
-	mfoxapp "github.com/go-musicfox/go-musicfox/utils/app"
+	appdirs "github.com/go-musicfox/go-musicfox/utils/app"
 	"github.com/go-musicfox/go-musicfox/utils/errorx"
 	"github.com/gookit/gcli/v2"
 )
@@ -16,7 +16,7 @@ import (
 func main() {
 	errorx.RunWrapped(func() {
 		defer errorx.Recover(false)
-		os.Exit(musicfox())
+		os.Exit(runTaple())
 	})
 }
 
@@ -36,17 +36,17 @@ func newCLI() *gcli.App {
 	return app
 }
 
-func musicfox() int {
+func runTaple() int {
 	if isFlagTrue("pure") {
-		root, err := os.MkdirTemp("", "tapefox-pure-*")
+		root, err := os.MkdirTemp("", "taple-pure-*")
 		if err != nil {
 			panic(fmt.Errorf("create temporary configuration: %w", err))
 		}
 		defer os.RemoveAll(root)
-		mfoxapp.SetupPureRoot(root)
+		appdirs.SetupPureRoot(root)
 		commands.GlobalOptions.PureMode = true
 	}
-	cfg, err := configs.NewConfigFromTomlFile(mfoxapp.ConfigFilePath())
+	cfg, err := configs.NewConfigFromTomlFile(appdirs.ConfigFilePath())
 	if err != nil {
 		panic(fmt.Errorf("load configuration: %w", err))
 	}

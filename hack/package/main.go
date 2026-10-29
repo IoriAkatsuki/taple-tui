@@ -19,7 +19,7 @@ import (
 
 func main() {
 	version := flag.String("version", os.Getenv("VERSION"), "release version")
-	binary := flag.String("binary", "", "native CGO binary (default bin/taple-tui[.exe])")
+	binary := flag.String("binary", "", "native CGO binary (default bin/taple[.exe])")
 	output := flag.String("output", "dist", "output directory")
 	flag.Parse()
 	if err := packageRelease(*version, *binary, *output); err != nil {
@@ -35,7 +35,7 @@ func releaseName(version, goos, goarch string) (string, error) {
 	if (goos != "linux" && goos != "darwin" && goos != "windows") || (goarch != "amd64" && goarch != "arm64") {
 		return "", fmt.Errorf("unsupported release platform %s/%s", goos, goarch)
 	}
-	return "taple-tui_" + version + "_" + goos + "_" + goarch, nil
+	return "taple_" + version + "_" + goos + "_" + goarch, nil
 }
 
 func packageRelease(version, binary, output string) error {
@@ -43,9 +43,9 @@ func packageRelease(version, binary, output string) error {
 	if err != nil {
 		return err
 	}
-	extension, executable := ".tar.gz", "taple-tui"
+	extension, executable := ".tar.gz", "taple"
 	if runtime.GOOS == "windows" {
-		extension, executable = ".zip", "taple-tui.exe"
+		extension, executable = ".zip", "taple.exe"
 	}
 	if binary == "" {
 		binary = filepath.Join("bin", executable)
@@ -91,7 +91,7 @@ func packageRelease(version, binary, output string) error {
 }
 
 func writeArchive(dst io.Writer, root, binary, name, goos string) error {
-	executable := "taple-tui"
+	executable := "taple"
 	if goos == "windows" {
 		executable += ".exe"
 	}

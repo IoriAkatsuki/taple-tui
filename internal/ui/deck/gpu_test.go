@@ -16,7 +16,7 @@ func TestGPUWalkmanMatchesCPU(t *testing.T) {
 		if runtime.GOOS == "darwin" && !errors.Is(err, metalcompute.ErrUnavailable) {
 			t.Fatal(err) // Shader/pipeline failures must not masquerade as absent hardware.
 		}
-		if os.Getenv("TAPEFOX_REQUIRE_GPU") == "1" || os.Getenv("TAPEFOX_REQUIRE_VULKAN") == "1" {
+		if os.Getenv("TAPLE_REQUIRE_GPU") == "1" || os.Getenv("TAPLE_REQUIRE_VULKAN") == "1" {
 			t.Fatal(err)
 		}
 		t.Skip(err)

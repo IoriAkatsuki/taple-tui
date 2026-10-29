@@ -197,7 +197,7 @@ func TestAppleMusicLyricWheelAndFramebuffer(t *testing.T) {
 					t.Fatal("wheel inside lyrics did not pause follow")
 				}
 			}
-			if dir := os.Getenv("TAPEFOX_LYRICS_PREVIEW_DIR"); dir != "" && level == motion.Off {
+			if dir := os.Getenv("TAPLE_LYRICS_PREVIEW_DIR"); dir != "" && level == motion.Off {
 				if err := os.MkdirAll(dir, 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -244,7 +244,7 @@ func TestAppleMusicLyricsShowSafeParseReason(t *testing.T) {
 	if !strings.Contains(out, "行开始时间格式不支持") || !strings.Contains(out, "XML 8:42") {
 		t.Fatal("lyrics UI hid the safe parse reason")
 	}
-	if dir := os.Getenv("TAPEFOX_LYRICS_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("TAPLE_LYRICS_PREVIEW_DIR"); dir != "" {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			t.Fatal(err)
 		}

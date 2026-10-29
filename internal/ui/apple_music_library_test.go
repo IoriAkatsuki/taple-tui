@@ -146,7 +146,7 @@ func TestAppleMusicLibraryCategoryPreviews(t *testing.T) {
 					t.Fatal("category overflow")
 				}
 			}
-			if dir := os.Getenv("TAPEFOX_LIBRARY_PREVIEW_DIR"); dir != "" {
+			if dir := os.Getenv("TAPLE_LIBRARY_PREVIEW_DIR"); dir != "" {
 				if err := os.MkdirAll(dir, 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -238,7 +238,7 @@ func TestAppleMusicLibraryFramesAndCollectionPlayback(t *testing.T) {
 				t.Fatal("library frame overflow")
 			}
 		}
-		if dir := os.Getenv("TAPEFOX_LIBRARY_PREVIEW_DIR"); dir != "" {
+		if dir := os.Getenv("TAPLE_LIBRARY_PREVIEW_DIR"); dir != "" {
 			if err := os.MkdirAll(dir, 0700); err != nil {
 				t.Fatal(err)
 			}

@@ -40,7 +40,7 @@ func TestChromeArgumentsKeepPrivateHeadlessRuntime(t *testing.T) {
 }
 
 func TestBundledRuntimeLayout(t *testing.T) {
-	executable := filepath.Join(t.TempDir(), "install with spaces", "taple-tui")
+	executable := filepath.Join(t.TempDir(), "install with spaces", "taple")
 	for _, goos := range []string{"linux", "windows", "darwin"} {
 		for _, candidate := range bundledBrowserCandidates(executable, goos) {
 			root := filepath.Join(filepath.Dir(executable), "runtime", "chromium")
@@ -82,12 +82,51 @@ func TestRuntimeSelectionAndExplicitFailure(t *testing.T) {
 	}
 }
 
+func TestFindChromeUsesTapleBrowserOverride(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAPLE_BROWSER", binary)
+	t.Setenv("TAPEFOX_BROWSER", filepath.Join(t.TempDir(), "missing-legacy-runtime"))
+	got, err := findChrome()
+	if err != nil || got != binary {
+		t.Fatalf("TAPLE_BROWSER was not selected: got=%q error=%v", got, err)
+	}
+}
+
+func TestFindChromeIgnoresLegacyBrowserOverride(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAPLE_BROWSER", "")
+	t.Setenv("TAPEFOX_BROWSER", binary)
+	t.Setenv("PATH", t.TempDir())
+	// Discovery may fail or find a native installation, but never the legacy override.
+	if got, err := findChrome(); got == binary {
+		t.Fatalf("legacy browser override was still read: got=%q error=%v", got, err)
+	}
+}
+
+func TestFindChromeRejectsInvalidTapleBrowserOverride(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAPLE_BROWSER", filepath.Join(t.TempDir(), "missing-runtime"))
+	t.Setenv("TAPEFOX_BROWSER", binary)
+	if got, err := findChrome(); err == nil || got != "" || !strings.Contains(err.Error(), "TAPLE_BROWSER") {
+		t.Fatalf("invalid TAPLE_BROWSER silently fell back: got=%q error=%v", got, err)
+	}
+}
+
 func TestHeadlessOpenDoesNotRequireDesktop(t *testing.T) {
 	t.Setenv("DISPLAY", "")
 	t.Setenv("WAYLAND_DISPLAY", "")
-	t.Setenv("TAPEFOX_BROWSER", filepath.Join(t.TempDir(), "missing-runtime"))
+	t.Setenv("TAPLE_BROWSER", filepath.Join(t.TempDir(), "missing-runtime"))
 	// Discovery must be reached even on Linux without a desktop. No process starts.
-	if _, err := Open(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "TAPEFOX_BROWSER") {
+	if _, err := Open(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "TAPLE_BROWSER") {
 		t.Fatalf("headless startup was gated on desktop availability: %v", err)
 	}
 }
@@ -185,8 +224,8 @@ func TestChromeFailedStartClosesParentPipes(t *testing.T) {
 
 // This test never opens Apple Music or an existing browser profile.
 func TestChromePrivatePipeSmoke(t *testing.T) {
-	if os.Getenv("TAPEFOX_CHROME_SMOKE") != "1" {
-		t.Skip("set TAPEFOX_CHROME_SMOKE=1 for a disposable, account-free native Chrome smoke test")
+	if os.Getenv("TAPLE_CHROME_SMOKE") != "1" {
+		t.Skip("set TAPLE_CHROME_SMOKE=1 for a disposable, account-free native Chrome smoke test")
 	}
 	binary, err := findChrome()
 	if err != nil {
@@ -203,7 +242,7 @@ func TestChromePrivatePipeSmoke(t *testing.T) {
 		if err != nil || !os.SameFile(identity, info) {
 			t.Fatal("profile identity changed across restart:", err)
 		}
-		marker := filepath.Join(profile, "tapefox-synthetic-session")
+		marker := filepath.Join(profile, "taple-synthetic-session")
 		if err := os.WriteFile(marker, []byte("synthetic; no credentials"), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -265,7 +304,7 @@ func chromePrivatePipeSmokeRound(t *testing.T, binary, profile string) {
 	// A native CI VM may spend tens of seconds on first process startup.
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	mediaProbe := os.Getenv("TAPEFOX_BROWSER_CAPABILITIES") == "1" || os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1"
+	mediaProbe := os.Getenv("TAPLE_BROWSER_CAPABILITIES") == "1" || os.Getenv("TAPLE_REQUIRE_WIDEVINE") == "1"
 	args := chromeSmokeArgs(profile, mediaProbe)
 	cmd := exec.CommandContext(ctx, binary, args...)
 	stderr := &chromeSmokeOutput{}
@@ -396,7 +435,7 @@ func probeBrowserCapabilities(t *testing.T, ctx context.Context, p *chromeSmokeR
 		t.Fatal("local capability probe did not reach a trustworthy origin")
 	}
 	t.Logf("headless media capability only: AAC=%q Widevine=%t reason=%q (not Apple Music playback)", caps.AAC, caps.Widevine, caps.Reason)
-	if os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1" && (caps.AAC == "" || !caps.Widevine) {
+	if os.Getenv("TAPLE_REQUIRE_WIDEVINE") == "1" && (caps.AAC == "" || !caps.Widevine) {
 		t.Fatal("selected runtime cannot negotiate AAC + Widevine in headless mode")
 	}
 }
@@ -464,7 +503,7 @@ func (o *chromeSmokeOutput) text(profile string) string {
 func logChromeSmokeBinary(t *testing.T, binary string) {
 	t.Helper()
 	real, err := filepath.EvalSymlinks(binary)
-	t.Logf("Chrome selection: binary=%q resolved=%q resolve_error=%v override=%t", binary, real, err, os.Getenv("TAPEFOX_BROWSER") != "")
+	t.Logf("Chrome selection: binary=%q resolved=%q resolve_error=%v override=%t", binary, real, err, os.Getenv("TAPLE_BROWSER") != "")
 	for _, candidate := range chromeCandidates() {
 		if path, err := exec.LookPath(candidate); err == nil {
 			t.Logf("Chrome candidate: name=%q path=%q", candidate, path)

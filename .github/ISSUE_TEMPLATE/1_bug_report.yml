@@ -1,5 +1,5 @@
 name: "Bug Report / 反馈Bug"
-description: "Create a report about the issues you encountered while using taple-tui / 反馈你使用 taple-tui 时遇到的问题"
+description: "Create a report about the issues you encountered while using taple / 反馈你使用 taple 时遇到的问题"
 labels: ["bug"]
 body:
   - type: checkboxes
@@ -28,8 +28,8 @@ body:
     attributes:
       label: Environment / 运行环境
       description: |
-        Describe the OS, CPU Arch of your machine and the version of taple-tui (`taple-tui -V`).
-        描述你电脑的操作系统及CPU架构，以及 taple-tui 的版本(可通过`taple-tui -V`获取)
+        Describe the OS, CPU Arch of your machine and the version of taple (`taple -V`). For historical v1.2.0 or earlier packages, use the original `taple-tui -V` command and report the exact version.
+        描述你电脑的操作系统及CPU架构，以及 taple 的版本（`taple -V`）。v1.2.0 及以前的历史包请使用原命令 `taple-tui -V`，并注明准确版本。
     validations:
       required: true
   - type: textarea
@@ -45,10 +45,10 @@ body:
   - type: textarea
     attributes:
       label: |
-        If applicable, attach your `${MUSICFOX_ROOT}/musicfox.log` file to this issue.
-        如果`${MUSICFOX_ROOT}/musicfox.log`里有错误日志，请一并上传
+        If applicable, attach relevant, redacted excerpts from `${TAPLE_ROOT}/log/taple.log`.
+        如果 `${TAPLE_ROOT}/log/taple.log` 有相关错误，请上传已脱敏的摘录。
       description: |
-        Upload `${MUSICFOX_ROOT}/musicfox.log`
-        上传`${MUSICFOX_ROOT}/musicfox.log`日志文件
+        Use the log path printed by the application. With TAPLE_ROOT set, it is `${TAPLE_ROOT}/log/taple.log`. Otherwise use `${XDG_STATE_HOME}/go-musicfox/log/taple.log`, or `<home>/.local/state/go-musicfox/log/taple.log` when XDG_STATE_HOME is unset. Attach only relevant, redacted excerpts; never cookies, profiles or credentials.
+        以程序打印的日志路径为准。设置 TAPLE_ROOT 时为 `${TAPLE_ROOT}/log/taple.log`；否则为 `${XDG_STATE_HOME}/go-musicfox/log/taple.log`，未设置 XDG_STATE_HOME 时为当前用户主目录下的 `.local/state/go-musicfox/log/taple.log`。只提供相关且已脱敏的摘录，不要上传 Cookie、浏览器 profile 或其他凭证。
     validations:
       required: false

@@ -47,11 +47,11 @@ func TestAppleMusicVUStartsByDefaultAndCanBeToggled(t *testing.T) {
 	if err := os.WriteFile(pcm, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "parec"), []byte("#!/bin/sh\n/bin/cat \"$TAPEFOX_TEST_PCM\"\nexec /bin/sleep 30\n"), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "parec"), []byte("#!/bin/sh\n/bin/cat \"$TAPLE_TEST_PCM\"\nexec /bin/sleep 30\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
-	t.Setenv("TAPEFOX_TEST_PCM", pcm)
+	t.Setenv("TAPLE_TEST_PCM", pcm)
 	p := NewAppleMusicPage(&appleTestClient{})
 	defer p.Close()
 	a := model.NewApp(model.DefaultOptions())
@@ -87,7 +87,7 @@ func TestAppleMusicVUStartsByDefaultAndCanBeToggled(t *testing.T) {
 	if strings.Contains(out, "VU OFF") || !strings.Contains(out, "VU METER") {
 		t.Fatal("active system mix is mislabeled")
 	}
-	if dir := os.Getenv("TAPEFOX_CATALOG_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("TAPLE_CATALOG_PREVIEW_DIR"); dir != "" {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			t.Fatal(err)
 		}

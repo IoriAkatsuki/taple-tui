@@ -17,10 +17,10 @@ import (
 // Requires an explicitly selected, closed, user-authorized session. This only
 // reads snapshot/capabilities; it never calls Do, Show, logout, or profile cleanup.
 func TestExistingSessionReadOnlyMediaDiagnosis(t *testing.T) {
-	if os.Getenv("TAPEFOX_APPLEMUSIC_DIAGNOSE") != "1" {
+	if os.Getenv("TAPLE_APPLEMUSIC_DIAGNOSE") != "1" {
 		t.Skip("requires explicit consent for read-only session diagnosis")
 	}
-	profile := os.Getenv("TAPEFOX_DIAGNOSTIC_PROFILE")
+	profile := os.Getenv("TAPLE_DIAGNOSTIC_PROFILE")
 	info, err := os.Stat(profile)
 	if err != nil || !filepath.IsAbs(profile) || !info.IsDir() {
 		t.Fatal("an existing absolute diagnostic profile is required")
@@ -56,7 +56,7 @@ func TestExistingSessionReadOnlyMediaDiagnosis(t *testing.T) {
 // Read-only, clean-profile capability test on the actual service origin. No
 // account is used, no playback is requested, and no page/session data is logged.
 func TestAppleMusicOriginMediaCapabilities(t *testing.T) {
-	if os.Getenv("TAPEFOX_MEDIA_PREFLIGHT_SMOKE") != "1" {
+	if os.Getenv("TAPLE_MEDIA_PREFLIGHT_SMOKE") != "1" {
 		t.Skip("opt-in, account-free capability probe on music.apple.com")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -79,7 +79,7 @@ func TestAppleMusicOriginMediaCapabilities(t *testing.T) {
 		}
 	}
 	t.Logf("music.apple.com headless capability only: AAC=%v Widevine=%v reason=%s (no account or playback)", caps.AAC, caps.Widevine, caps.Reason)
-	if os.Getenv("TAPEFOX_REQUIRE_WIDEVINE") == "1" && (!caps.AAC || !caps.Widevine) {
+	if os.Getenv("TAPLE_REQUIRE_WIDEVINE") == "1" && (!caps.AAC || !caps.Widevine) {
 		t.Fatal("AAC/Widevine preflight failed")
 	}
 }
@@ -149,7 +149,7 @@ func TestPlaybackPreflightPreventsUnsupportedQueueSubmission(t *testing.T) {
 					result = map[string]string{"sessionId": "session"}
 				case "Runtime.evaluate":
 					var value any = caps
-					if !strings.Contains(request.Params.Expression, "tapefox.mediaCapabilities") {
+					if !strings.Contains(request.Params.Expression, "taple.mediaCapabilities") {
 						actions.Add(1)
 						value = true
 					}

@@ -43,7 +43,7 @@ func (b *Browser) checkPlaybackCapabilities(ctx context.Context, action Action) 
 	case caps.Reason == "timeout":
 		return fmt.Errorf("%w：Widevine 检测超时，请稍后重试；未提交播放请求", ErrPlaybackUnavailable)
 	case !caps.Widevine:
-		return fmt.Errorf("%w：当前无头运行时不能使用 Widevine；歌词可读取，但加密歌曲无法播放。请检查 CDM 或 TAPEFOX_BROWSER", ErrPlaybackUnavailable)
+		return fmt.Errorf("%w：当前无头运行时不能使用 Widevine；歌词可读取，但加密歌曲无法播放。请检查 CDM 或 TAPLE_BROWSER", ErrPlaybackUnavailable)
 	default:
 		return nil
 	}

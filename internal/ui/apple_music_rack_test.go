@@ -167,9 +167,9 @@ func TestAppleMusicRackPartialSlotsAreNotClickable(t *testing.T) {
 }
 
 func TestAppleMusicRackAndGlowPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_RACK_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_RACK_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_RACK_PREVIEW_DIR for physical cassettes and standby glow")
+		t.Skip("set TAPLE_RACK_PREVIEW_DIR for physical cassettes and standby glow")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)

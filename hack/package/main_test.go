@@ -23,7 +23,7 @@ func TestReleaseNameRejectsPathsAndUnknownPlatforms(t *testing.T) {
 			t.Fatalf("accepted unsupported platform %v", platform)
 		}
 	}
-	if name, err := releaseName("v1.1.0-rc.1", "darwin", "arm64"); err != nil || name != "taple-tui_v1.1.0-rc.1_darwin_arm64" {
+	if name, err := releaseName("v1.1.0-rc.1", "darwin", "arm64"); err != nil || name != "taple_v1.1.0-rc.1_darwin_arm64" {
 		t.Fatalf("name=%q error=%v", name, err)
 	}
 }
@@ -53,7 +53,7 @@ func TestArchiveHasOnlyReleaseFilesAndIsDeterministic(t *testing.T) {
 			if !bytes.Equal(first.Bytes(), second.Bytes()) {
 				t.Fatal("same input produced different archive bytes")
 			}
-			binary := "taple-tui"
+			binary := "taple"
 			if goos == "windows" {
 				binary += ".exe"
 			}

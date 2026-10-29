@@ -91,8 +91,8 @@ func TestMeterPlatformBoundary(t *testing.T) {
 }
 
 func TestSystemOutputMeterLive(t *testing.T) {
-	if os.Getenv("TAPEFOX_METER_LIVE") != "1" {
-		t.Skip("set TAPEFOX_METER_LIVE=1 for system-output sampling; includes other apps")
+	if os.Getenv("TAPLE_METER_LIVE") != "1" {
+		t.Skip("set TAPLE_METER_LIVE=1 for system-output sampling; includes other apps")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()

@@ -30,7 +30,7 @@ func TestAppleMusicDefaultGPUStartupAndClose(t *testing.T) {
 		if !strings.Contains(p.renderBackend, "CPU") {
 			t.Fatal("GPU failure was hidden")
 		}
-		if os.Getenv("TAPEFOX_REQUIRE_GPU") == "1" || os.Getenv("TAPEFOX_REQUIRE_VULKAN") == "1" {
+		if os.Getenv("TAPLE_REQUIRE_GPU") == "1" || os.Getenv("TAPLE_REQUIRE_VULKAN") == "1" {
 			t.Fatal(m.err)
 		}
 		return
@@ -68,7 +68,7 @@ func TestAppleMusicActivePollingAndGPUPreview(t *testing.T) {
 	if p.pollDelay() != 100*time.Millisecond {
 		t.Fatal("lyric clock polling is too slow")
 	}
-	dir := os.Getenv("TAPEFOX_GPU_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_GPU_PREVIEW_DIR")
 	if dir == "" {
 		return
 	}

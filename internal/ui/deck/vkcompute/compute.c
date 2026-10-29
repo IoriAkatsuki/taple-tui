@@ -190,7 +190,7 @@ tf_gpu *tf_gpu_open(const uint32_t *code, size_t bytes, char *error,
     instance_extensions[instance_extension_count++] =
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
   VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-                           .pApplicationName = "tapefox",
+                           .pApplicationName = "taple",
                            .apiVersion = VK_API_VERSION_1_0};
   VkInstanceCreateInfo instance = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,

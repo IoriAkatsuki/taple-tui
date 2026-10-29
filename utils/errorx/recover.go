@@ -41,7 +41,7 @@ func formatCrashReport(err any) string {
 		version += " [" + types.BuildTags + "]"
 	}
 	return fmt.Sprintf(`
-musicfox 发生未预期的错误，已退出。
+taple 发生未预期的错误，已退出。
 
 错误: %v
 

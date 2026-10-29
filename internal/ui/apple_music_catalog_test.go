@@ -203,7 +203,7 @@ func TestAppleMusicCatalogMouseAndFramebuffer(t *testing.T) {
 		a := model.NewApp(model.DefaultOptions())
 		p.Update(p.handleKey(tea.KeyPressMsg{Code: '5'})(), a)
 		out := p.draw(size[0], size[1], time.Unix(100, 0), 2)
-		if dir := os.Getenv("TAPEFOX_CATALOG_PREVIEW_DIR"); dir != "" {
+		if dir := os.Getenv("TAPLE_CATALOG_PREVIEW_DIR"); dir != "" {
 			if err := os.MkdirAll(dir, 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -235,7 +235,7 @@ func TestAppleMusicCatalogMouseAndFramebuffer(t *testing.T) {
 			t.Fatal("container click failed or played music")
 		}
 		p.draw(size[0], size[1], time.Unix(100, 0), 2)
-		if dir := os.Getenv("TAPEFOX_CATALOG_PREVIEW_DIR"); dir != "" {
+		if dir := os.Getenv("TAPLE_CATALOG_PREVIEW_DIR"); dir != "" {
 			writeAppleFrame(t, p, filepath.Join(dir, fmt.Sprintf("album-tracks-%dx%d.html", size[0], size[1])))
 		}
 		p.Close()
@@ -243,9 +243,9 @@ func TestAppleMusicCatalogMouseAndFramebuffer(t *testing.T) {
 }
 
 func TestAppleMusicCatalogAlignmentPreview(t *testing.T) {
-	dir := os.Getenv("TAPEFOX_CATALOG_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_CATALOG_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_CATALOG_PREVIEW_DIR for real framebuffer exports")
+		t.Skip("set TAPLE_CATALOG_PREVIEW_DIR for real framebuffer exports")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)

@@ -103,7 +103,7 @@ func TestCookieImportRejectsEmptyJarWithoutBrowserIO(t *testing.T) {
 }
 
 func TestCookieImportSyntheticBrowserSmoke(t *testing.T) {
-	if os.Getenv("TAPEFOX_COOKIE_SMOKE") != "1" {
+	if os.Getenv("TAPLE_COOKIE_SMOKE") != "1" {
 		t.Skip("opt-in clean-profile synthetic cookie test; no user account")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -113,7 +113,7 @@ func TestCookieImportSyntheticBrowserSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	jar, err := parseCookies([]byte(`[{"domain":"music.apple.com","hostOnly":true,"name":"tapefox-synthetic-host","value":"fixture-only","secure":true,"httpOnly":true,"sameSite":"Strict"},{"domain":".music.apple.com","hostOnly":false,"name":"tapefox-synthetic-domain","value":"fixture-only","secure":true,"sameSite":"Lax","expires":2000000000}]`), time.Now())
+	jar, err := parseCookies([]byte(`[{"domain":"music.apple.com","hostOnly":true,"name":"taple-synthetic-host","value":"fixture-only","secure":true,"httpOnly":true,"sameSite":"Strict"},{"domain":".music.apple.com","hostOnly":false,"name":"taple-synthetic-domain","value":"fixture-only","secure":true,"sameSite":"Lax","expires":2000000000}]`), time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,12 +132,12 @@ func TestCookieImportSyntheticBrowserSmoke(t *testing.T) {
 	found := 0
 	for _, c := range received.Cookies {
 		switch c.Name {
-		case "tapefox-synthetic-host":
+		case "taple-synthetic-host":
 			if c.Domain != "music.apple.com" || !c.HTTPOnly || !c.Secure || !c.Session || c.SameSite != "Strict" {
 				t.Fatal("host-only/session/security attributes changed")
 			}
 			found++
-		case "tapefox-synthetic-domain":
+		case "taple-synthetic-domain":
 			if c.Domain != ".music.apple.com" || !c.Secure || c.Session || c.SameSite != "Lax" {
 				t.Fatal("domain/persistent attributes changed")
 			}

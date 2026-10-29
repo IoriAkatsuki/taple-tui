@@ -15,7 +15,7 @@ func ConfigDir() string {
 	if pureRoot != "" {
 		return pureRoot
 	}
-	if root := os.Getenv("MUSICFOX_ROOT"); root != "" {
+	if root := os.Getenv("TAPLE_ROOT"); root != "" {
 		return root
 	}
 	root, err := os.UserConfigDir()
@@ -33,7 +33,7 @@ func LogDir() string {
 	var dir string
 	if pureRoot != "" {
 		dir = filepath.Join(pureRoot, "log")
-	} else if root := os.Getenv("MUSICFOX_ROOT"); root != "" {
+	} else if root := os.Getenv("TAPLE_ROOT"); root != "" {
 		dir = filepath.Join(root, "log")
 	} else {
 		root := os.Getenv("XDG_STATE_HOME")

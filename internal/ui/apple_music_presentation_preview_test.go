@@ -17,9 +17,9 @@ import (
 
 func presentationPreviewDir(t *testing.T) string {
 	t.Helper()
-	dir := os.Getenv("TAPEFOX_PRESENTATION_PREVIEW_DIR")
+	dir := os.Getenv("TAPLE_PRESENTATION_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set TAPEFOX_PRESENTATION_PREVIEW_DIR to export synthetic framebuffer fixtures")
+		t.Skip("set TAPLE_PRESENTATION_PREVIEW_DIR to export synthetic framebuffer fixtures")
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func presentationPreviewDir(t *testing.T) string {
 
 func exportPresentation(t *testing.T, p *AppleMusicPage, name string) {
 	t.Helper()
-	if os.Getenv("TAPEFOX_PRESENTATION_PREVIEW_DIR") == "" {
+	if os.Getenv("TAPLE_PRESENTATION_PREVIEW_DIR") == "" {
 		return
 	}
 	writeAppleFrame(t, p, filepath.Join(presentationPreviewDir(t), name+".html"))

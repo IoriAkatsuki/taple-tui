@@ -47,7 +47,7 @@ func findChrome() (string, error) {
 		executable = real
 	}
 	candidates := append(bundledBrowserCandidates(executable, runtime.GOOS), chromeCandidates()...)
-	return resolveBrowser(os.Getenv("TAPEFOX_BROWSER"), candidates)
+	return resolveBrowser(os.Getenv("TAPLE_BROWSER"), candidates)
 }
 
 func bundledBrowserCandidates(executable, goos string) []string {
@@ -66,7 +66,7 @@ func resolveBrowser(override string, candidates []string) (string, error) {
 	if override != "" {
 		path, err := exec.LookPath(override)
 		if err != nil {
-			return "", fmt.Errorf("TAPEFOX_BROWSER 指定的 Chromium 运行时不可执行: %w", err)
+			return "", fmt.Errorf("TAPLE_BROWSER 指定的 Chromium 运行时不可执行: %w", err)
 		}
 		// A bad explicit selection must never silently launch a different browser.
 		return filepath.Abs(path)
@@ -76,7 +76,7 @@ func resolveBrowser(override string, candidates []string) (string, error) {
 			return filepath.Abs(path)
 		}
 	}
-	return "", errors.New("未找到 Chromium 运行时；请放入 runtime/chromium 或用 TAPEFOX_BROWSER 指定路径（完整播放需要 AAC 和 Widevine 支持）")
+	return "", errors.New("未找到 Chromium 运行时；请放入 runtime/chromium 或用 TAPLE_BROWSER 指定路径（完整播放需要 AAC 和 Widevine 支持）")
 }
 
 func chromeArgs(profile string, background bool) []string {

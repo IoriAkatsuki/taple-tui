@@ -13,8 +13,8 @@ import (
 // An opt-in A/B experiment, not a replacement for the .8 parity gate. The
 // generated shader and production compiler options remain unchanged.
 func TestMetalNormalizeDiagnostic(t *testing.T) {
-	if os.Getenv("TAPEFOX_GPU_DIAGNOSTICS") != "1" {
-		t.Skip("set TAPEFOX_GPU_DIAGNOSTICS=1 for native Metal precision diagnostics")
+	if os.Getenv("TAPLE_GPU_DIAGNOSTICS") != "1" {
+		t.Skip("set TAPLE_GPU_DIAGNOSTICS=1 for native Metal precision diagnostics")
 	}
 	if !strings.Contains(walkmanMSL, "precise::normalize(") {
 		t.Fatal("generated shader no longer contains precise normalization")

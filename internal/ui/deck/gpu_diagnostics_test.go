@@ -200,7 +200,7 @@ func logGPUParityDiagnostics(t *testing.T, g *GPU, v View, pose Pose, st Walkman
 	rawTotal := e.Raw.AbsRGB[0] + e.Raw.AbsRGB[1] + e.Raw.AbsRGB[2]
 	fitTotal := e.Fitted.AbsRGB[0] + e.Fitted.AbsRGB[1] + e.Fitted.AbsRGB[2]
 	t.Logf("raw RGB MAE: bounds=%.6f viewport=%.6f; fitted viewport MAE=%.6f (includes coverage mismatches)", rawTotal/float64(max(e.Raw.Samples, 1)*3), rawTotal/float64(v.W*v.H*gc*gr*3), fitTotal/float64(max(e.Fitted.Samples, 1)*3))
-	if dir := os.Getenv("TAPEFOX_GPU_DIAGNOSTICS_DIR"); dir != "" {
+	if dir := os.Getenv("TAPLE_GPU_DIAGNOSTICS_DIR"); dir != "" {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			t.Error(err)
 			return

@@ -44,7 +44,7 @@ func TestWindowsChromeFailedStartClosesInheritedHandles(t *testing.T) {
 }
 
 func TestWindowsChromeDiscoveryUsesUserInstall(t *testing.T) {
-	t.Setenv("TAPEFOX_BROWSER", "")
+	t.Setenv("TAPLE_BROWSER", "")
 	root := t.TempDir()
 	t.Setenv("PATH", root)
 	t.Setenv("LOCALAPPDATA", root)
@@ -79,7 +79,7 @@ func TestWindowsChromePipeHandles(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWindowsChromePipeChild$", "--")
-	cmd.Env = append(os.Environ(), "TAPEFOX_PIPE_CHILD=1")
+	cmd.Env = append(os.Environ(), "TAPLE_PIPE_CHILD=1")
 	if err := startChrome(cmd, childRead, childWrite); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestWindowsChromePipeHandles(t *testing.T) {
 }
 
 func TestWindowsChromePipeChild(t *testing.T) {
-	if os.Getenv("TAPEFOX_PIPE_CHILD") != "1" {
+	if os.Getenv("TAPLE_PIPE_CHILD") != "1" {
 		return
 	}
 	for _, arg := range os.Args {

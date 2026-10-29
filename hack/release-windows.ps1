@@ -14,9 +14,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Release packaging failed.' }
     $arch = & $GoBinary env GOARCH
     if ($LASTEXITCODE -ne 0) { throw 'Could not determine release architecture.' }
-    $name = "taple-tui_${Version}_windows_${arch}"
+    $name = "taple_${Version}_windows_${arch}"
     $exe = Join-Path $root "dist/$name.exe"
-    Copy-Item -LiteralPath (Join-Path $root 'bin/taple-tui.exe') -Destination $exe
+    Copy-Item -LiteralPath (Join-Path $root 'bin/taple.exe') -Destination $exe
     $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText("$exe.sha256", "$hash  $name.exe`n", [Text.UTF8Encoding]::new($false))
     Write-Host "Release files: $root\dist\$name.*"

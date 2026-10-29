@@ -1,12 +1,6 @@
-# taple-tui
+# taple
 
-### Windows portable releases
-
-Windows releases provide a ZIP and a standalone `taple-tui_<version>_windows_amd64.exe`, plus SHA-256 checksums. Run the EXE from PowerShell / Windows Terminal; it is a console application, not an installer. No Go or MSYS2 installation is needed at runtime. Chrome and an Apple Music subscription are still required. Binaries are unsigned.
-
-From a configured Windows build environment, run `go test ./...`, `go vet ./...`, then `./hack/release-windows.ps1 -Version v1.1.0`. Pushing a `v*` tag publishes a GitHub Release only after all native platform checks succeed; branch builds produce Actions artifacts only.
-
-An Apple Music TUI player for desktop systems, supporting Linux, Windows, and macOS. It renders a blue-and-silver Walkman cassette deck (TPS-L2 proportions) in real time with terminal block characters. The name combines **Tap**e, App**le** (Apple Music), and **TUI**.
+An Apple Music TUI player for desktop systems, supporting Linux, Windows, and macOS. It renders a blue-and-silver Walkman cassette deck (TPS-L2 proportions) in real time with terminal block characters. The name combines **Tap**e and App**le** (Apple Music).
 
 [简体中文](README.md) · [Releases](https://github.com/IoriAkatsuki/taple-tui/releases)
 
@@ -31,24 +25,25 @@ An Apple Music TUI player for desktop systems, supporting Linux, Windows, and ma
 
 Current source defaults to a windowless Chromium runtime; a full Chrome installation is optional. Initial interactive sign-in still needs a graphical session. Full playback requires an active Apple Music subscription, AAC decoding, and Widevine support in the selected runtime. **Headless DRM playback is experimental: successful startup or codec negotiation is not proof of protected playback.** Linux/Windows use Vulkan compute; macOS uses native Metal, with CPU fallback when unavailable.
 
-These headless/native-Metal changes are not included in the published v1.1.0 binaries. See [runtime and validation notes (Chinese)](docs/headless-runtime.md).
+The current `refactor/taple-identity` branch uses `taple` for the product, command, and new build artifacts, and `TAPLE_*` for project environment variables. This naming change has not been released. See [migration rules (Chinese)](docs/naming.md). The headless/native-Metal changes are not included in the published v1.1.0 binaries; see [runtime and validation notes (Chinese)](docs/headless-runtime.md).
 
-### 1. Prebuilt releases
+### 1. Historical prebuilt releases (v1.2.0 and earlier)
 
-Download the archive or package for your platform from [GitHub Releases](https://github.com/IoriAkatsuki/taple-tui/releases) (checksums are listed in `SHA256SUMS`):
+Choose an existing version from [GitHub Releases](https://github.com/IoriAkatsuki/taple-tui/releases) (checksums are listed in `SHA256SUMS`). The table retains the real `taple-tui` filenames and commands for historical packages; available platforms and files depend on the selected Release. It does not announce new `taple` packages. For environment variables in historical binaries, consult the documentation at the corresponding tag.
 
-| Platform | Arch | Release artifact | Install / Run |
+| Platform | Arch | Historical release artifact | Install / Run historical package |
 | :--- | :--- | :--- | :--- |
 | Linux (Fedora / RHEL / openSUSE) | `x86_64` | `taple-tui-*.x86_64.rpm` | `sudo dnf install ./taple-tui-*.rpm` or `sudo zypper install ./taple-tui-*.rpm` |
 | Linux (Debian / Ubuntu) | `x86_64` | `taple-tui_*_amd64.deb` | `sudo apt install ./taple-tui_*_amd64.deb` |
 | Linux (Portable archive) | `x86_64` | `taple-tui_*_linux_amd64.tar.gz` | Extract and run `./taple-tui` |
 | Windows | `x86_64` | `taple-tui_*_windows_amd64.zip` | Extract and run `./taple-tui.exe` in Windows Terminal (PowerShell) |
+| Windows (Standalone EXE) | `x86_64` | `taple-tui_*_windows_amd64.exe` | Run `& .\taple-tui_<version>_windows_amd64.exe` in PowerShell; no installation needed |
 | macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | Extract and run `./taple-tui`; the old v1.1.0 GPU backend needs MoltenVK |
 | macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | Extract and run `./taple-tui`; the old v1.1.0 GPU backend needs MoltenVK |
 
-### 2. Build from source
+### 2. Build from current source
 
-Requires Go 1.26 or newer.
+Requires Go 1.26 or newer. These commands build this branch's `taple`, not the historical packages listed above.
 
 #### Linux
 
@@ -56,8 +51,8 @@ Install a C compiler and Vulkan headers (`gcc vulkan-headers` on Fedora; `build-
 
 ```sh
 make build
-./bin/taple-tui                   # Start player (also creates ./bin/tapefox symlink)
-./bin/taple-tui --pure            # Use a temporary config and browser profile
+./bin/taple                       # Start player
+./bin/taple --pure                # Use a temporary config and browser profile
 CGO_ENABLED=0 make build          # Build a CPU-only binary
 ```
 
@@ -69,8 +64,21 @@ Install Go and the MSYS2 UCRT64 packages `mingw-w64-ucrt-x86_64-gcc` and `mingw-
 $env:CC = 'gcc'
 $env:CGO_ENABLED = '1'
 ./hack/build.ps1 build
-./bin/taple-tui.exe
+./bin/taple.exe
 ```
+
+The EXE is a portable console application, not a graphical installer. Run it from PowerShell / Windows Terminal. No Go, MSYS2, or build tools are needed at runtime. Binaries are unsigned; a compatible browser runtime and an active Apple Music subscription are still required (v1.1.0 uses Chrome).
+
+Test and build Windows release candidates from the current branch (ZIP, standalone EXE, and SHA-256 checksums). Replace `vX.Y.Z` with a real, unpublished version:
+
+```powershell
+go test ./...
+go vet ./...
+./hack/release-windows.ps1 -Version vX.Y.Z
+Get-FileHash ./dist/taple_vX.Y.Z_windows_amd64.exe -Algorithm SHA256
+```
+
+Pushing a `v*` tag publishes a GitHub Release only after all native platform checks succeed; branch builds produce Actions artifacts only.
 
 #### macOS
 
@@ -80,14 +88,14 @@ Install Xcode Command Line Tools and Go. Current source links the system Foundat
 xcode-select --install
 brew install go
 make build
-./bin/taple-tui
+./bin/taple
 ```
 
 ### 3. Package release archives
 
 ```sh
-make package                      # Build dist/taple-tui_<ver>_<os>_<arch>.tar.gz (or .zip) and .sha256
-make rpm                          # Build dist/taple-tui-*.rpm on Linux
+make package                      # Build dist/taple_<ver>_<os>_<arch>.tar.gz (or .zip) and .sha256
+make rpm                          # Build dist/taple-*.rpm on Linux
 ```
 
 ### Import a local cookie file
@@ -96,7 +104,7 @@ Import only your own Apple Music cookies into the dedicated application profile:
 
 ```sh
 chmod 600 "$HOME/apple-music-cookies.json"
-./taple-tui --import-cookies "$HOME/apple-music-cookies.json"
+./taple --import-cookies "$HOME/apple-music-cookies.json"
 ```
 
 Netscape cookie jars and browser JSON arrays are supported. The player starts after import, without requesting playback. An already authorized profile is not overwritten. The source file is unchanged and cookie values are never included in import errors or logs. **Accepted cookie writes do not prove authorization, subscription access or DRM playback.** Keep credential files outside the repository and never attach them to issues. See [format, Windows ACL and session rules](https://github.com/IoriAkatsuki/taple-tui/blob/main/docs/cookie-import.md).
@@ -122,7 +130,7 @@ Netscape cookie jars and browser JSON arrays are supported. The player starts af
 
 ## Configuration and local paths
 
-The client reads settings from `go-musicfox/config.toml` under the OS configuration directory, or `$MUSICFOX_ROOT/config.toml` (`$XDG_CONFIG_HOME` or `~/.config` on Linux, `~/Library/Application Support` on macOS, `%APPDATA%` on Windows):
+The client reads settings from `go-musicfox/config.toml` under the OS configuration directory, or `$TAPLE_ROOT/config.toml` (`$XDG_CONFIG_HOME` or `~/.config` on Linux, `~/Library/Application Support` on macOS, `%APPDATA%` on Windows):
 
 ```toml
 [main]
@@ -131,9 +139,9 @@ blockGlyphs = "auto"  # auto / half / quadrant / sextant / octant / braille
 frameRate = 60        # 1..240
 ```
 
-If the file does not exist, the client uses the defaults above.
+If the file does not exist, the client uses the defaults above. The `go-musicfox` configuration directory and the `tapefox/apple-music/chrome` profile below are retained compatibility paths; this rename does not move or delete them. The current branch does not fall back to old environment variables. Rename keys without changing their values; see [migration rules (Chinese)](docs/naming.md).
 
-- Runtime selection: explicit `TAPEFOX_BROWSER` executable → `runtime/chromium` beside the player executable → system Chromium → legacy Chrome installations. An invalid override fails rather than silently selecting another browser. Keep the runtime's complete resources and license notices; current release scripts do not bundle Chromium or Widevine.
+- Runtime selection: explicit `TAPLE_BROWSER` executable → `runtime/chromium` beside the player executable → system Chromium → legacy Chrome installations. An invalid override fails rather than silently selecting another browser. Keep the runtime's complete resources and license notices; current release scripts do not bundle Chromium or Widevine.
 - Browser profile: Chromium communicates over `--remote-debugging-pipe` and retains the existing `tapefox/apple-music/chrome` profile under the OS configuration directory (mode `0700` on Unix; current-user-only ACL on Windows).
 - Audio metering: on Linux, the VU meter runs `parec` against PulseAudio or PipeWire `@DEFAULT_MONITOR@` to measure system-mix RMS dBFS.
 

@@ -1,6 +1,6 @@
-# taple-tui
+# taple
 
-面向桌面的 Apple Music 终端播放器，使用块字符实时渲染蓝银 Walkman 磁带卡座（TPS-L2 比例）。支持 Linux、Windows 与 macOS。名称结合 **Tap**e（磁带）、App**le**（Apple Music）与 **TUI**。
+面向桌面的 Apple Music 终端播放器，使用块字符实时渲染蓝银 Walkman 磁带卡座（TPS-L2 比例）。支持 Linux、Windows 与 macOS。名称结合 **Tap**e（磁带）与 App**le**（Apple Music）。
 
 [English](README.en.md) · [Releases 下载](https://github.com/IoriAkatsuki/taple-tui/releases)
 
@@ -25,13 +25,13 @@
 
 开发版默认使用无窗口的 Chromium 运行时，不强制安装完整 Chrome；首次交互登录仍需图形会话。完整播放需要有效的 Apple Music 订阅，以及运行时的 AAC 解码和 Widevine DRM 支持。**无头 DRM 播放仍属实验性：进程启动或 AAC 检测成功不等于能播放受保护歌曲。** Linux/Windows 默认使用 Vulkan Compute，macOS 直接使用系统 Metal，无可用 GPU 时回退 CPU。
 
-> 以下无头运行时与原生 Metal 说明针对当前源码；已发布的 v1.1.0 二进制不包含这些新改动。详见 [运行时与验证说明](docs/headless-runtime.md)。
+> 当前 `refactor/taple-identity` 分支的名称、命令与新构建产物统一为 `taple`，项目环境变量统一为 `TAPLE_*`；本轮命名变更尚未发布。迁移规则见 [命名说明](docs/naming.md)。以下无头运行时与原生 Metal 说明针对当前源码；已发布的 v1.1.0 二进制不包含这些新改动，详见 [运行时与验证说明](docs/headless-runtime.md)。
 
-### 1. 下载 Release 预编译包
+### 1. 下载历史 Release 预编译包（v1.2.0 及之前）
 
-前往 [GitHub Releases](https://github.com/IoriAkatsuki/taple-tui/releases) 下载对应平台安装包（含 `SHA256SUMS` 校验文件）：
+前往 [GitHub Releases](https://github.com/IoriAkatsuki/taple-tui/releases) 选择已有版本（含 `SHA256SUMS` 校验文件）。下表保留历史包的真实 `taple-tui` 文件名与启动命令；具体平台和文件以对应 Release 为准，不表示已有 `taple` 新包。历史包的旧环境变量行为以对应 tag 文档为准：
 
-| 平台 | 架构 | Release 软件包 | 安装与启动方式 |
+| 平台 | 架构 | 历史 Release 软件包 | 历史包安装与启动方式 |
 | :--- | :--- | :--- | :--- |
 | Linux (Fedora / RHEL / openSUSE) | `x86_64` | `taple-tui-*.x86_64.rpm` | `sudo dnf install ./taple-tui-*.rpm` 或 `sudo zypper install ./taple-tui-*.rpm` |
 | Linux (Debian / Ubuntu) | `x86_64` | `taple-tui_*_amd64.deb` | `sudo apt install ./taple-tui_*_amd64.deb` |
@@ -41,9 +41,9 @@
 | macOS (Apple Silicon) | `arm64` | `taple-tui_*_darwin_arm64.tar.gz` | 解压后运行 `./taple-tui`；v1.1.0 的旧 GPU 后端需 MoltenVK |
 | macOS (Intel) | `x86_64` | `taple-tui_*_darwin_amd64.tar.gz` | 解压后运行 `./taple-tui`；v1.1.0 的旧 GPU 后端需 MoltenVK |
 
-### 2. 从源码构建
+### 2. 从当前源码构建
 
-需要 Go 1.26 或更高版本。
+需要 Go 1.26 或更高版本。以下命令生成本分支的 `taple`，不是上表历史包的命令。
 
 #### Linux
 
@@ -51,8 +51,8 @@
 
 ```sh
 make build
-./bin/taple-tui                   # 启动播放器（同时生成 ./bin/tapefox 软链）
-./bin/taple-tui --pure            # 使用临时配置与临时浏览器目录
+./bin/taple                       # 启动播放器
+./bin/taple --pure                # 使用临时配置与临时浏览器目录
 CGO_ENABLED=0 make build          # 构建纯 CPU 版本
 ```
 
@@ -64,18 +64,18 @@ CGO_ENABLED=0 make build          # 构建纯 CPU 版本
 $env:CC = 'gcc'
 $env:CGO_ENABLED = '1'
 ./hack/build.ps1 build
-./bin/taple-tui.exe
+./bin/taple.exe
 ```
 
 EXE 是命令行便携程序，不是图形安装器；运行时无需 Go、MSYS2 或编译工具。建议在 Windows Terminal 中启动，而不是双击。发布包未进行代码签名，Windows 可能显示未知发布者提示。兼容的浏览器运行时和有效 Apple Music 订阅仍需单独准备（v1.1.0 使用 Chrome）。
 
-在 PowerShell 中测试并生成 Windows Release（ZIP、独立 EXE 和各自的 SHA-256 校验文件）：
+在 PowerShell 中测试并生成当前分支的 Windows 发布候选产物（ZIP、独立 EXE 和各自的 SHA-256 校验文件；将 `vX.Y.Z` 替换为尚未发布的实际版本号）：
 
 ```powershell
 go test ./...
 go vet ./...
-./hack/release-windows.ps1 -Version v1.1.0
-Get-FileHash ./dist/taple-tui_v1.1.0_windows_amd64.exe -Algorithm SHA256
+./hack/release-windows.ps1 -Version vX.Y.Z
+Get-FileHash ./dist/taple_vX.Y.Z_windows_amd64.exe -Algorithm SHA256
 ```
 
 维护者推送 `v*` 版本标签后，GitHub Actions 会在所有原生平台检查通过后自动发布 Release，包含 Windows EXE / ZIP 与 `SHA256SUMS`；普通分支构建只上传 Actions artifacts，不创建 Release。
@@ -88,14 +88,14 @@ Get-FileHash ./dist/taple-tui_v1.1.0_windows_amd64.exe -Algorithm SHA256
 xcode-select --install
 brew install go
 make build
-./bin/taple-tui
+./bin/taple
 ```
 
 ### 3. 打包发布产物
 
 ```sh
-make package                      # 生成当前平台的 dist/taple-tui_<ver>_<os>_<arch>.tar.gz (或 .zip) 及 .sha256
-make rpm                          # 在 Linux 上构建 dist/taple-tui-*.rpm
+make package                      # 生成当前平台的 dist/taple_<ver>_<os>_<arch>.tar.gz (或 .zip) 及 .sha256
+make rpm                          # 在 Linux 上构建 dist/taple-*.rpm
 ```
 
 ### 本地 Cookie 导入
@@ -104,7 +104,7 @@ make rpm                          # 在 Linux 上构建 dist/taple-tui-*.rpm
 
 ```sh
 chmod 600 "$HOME/apple-music-cookies.json"
-./taple-tui --import-cookies "$HOME/apple-music-cookies.json"
+./taple --import-cookies "$HOME/apple-music-cookies.json"
 ```
 
 支持 Netscape Cookie Jar 和浏览器 JSON 数组；导入后继续启动 TUI，不自动播放。已授权会话拒绝混入，输入文件不改写，Cookie 值不进入日志。**导入成功不等于账号授权或 DRM 播放成功。** Windows ACL、允许的域、过期与会话规则见 [Cookie 导入说明](https://github.com/IoriAkatsuki/taple-tui/blob/main/docs/cookie-import.md)。文件应放在仓库外，勿上传到 issue 或聊天。
@@ -130,7 +130,7 @@ chmod 600 "$HOME/apple-music-cookies.json"
 
 ## 配置与本地路径
 
-程序从系统配置目录下的 `go-musicfox/config.toml` 或 `$MUSICFOX_ROOT/config.toml` 读取设置（Linux 为 `$XDG_CONFIG_HOME` 默认 `~/.config`，macOS 为 `~/Library/Application Support`，Windows 为 `%APPDATA%`）：
+程序从系统配置目录下的 `go-musicfox/config.toml` 或 `$TAPLE_ROOT/config.toml` 读取设置（Linux 为 `$XDG_CONFIG_HOME` 默认 `~/.config`，macOS 为 `~/Library/Application Support`，Windows 为 `%APPDATA%`）：
 
 ```toml
 [main]
@@ -139,9 +139,9 @@ blockGlyphs = "auto"  # auto / half / quadrant / sextant / octant / braille
 frameRate = 60        # 1..240
 ```
 
-配置文件缺失时直接使用上述默认值。
+配置文件缺失时直接使用上述默认值。`go-musicfox` 配置目录与下述 `tapefox/apple-music/chrome` 是保留的兼容磁盘路径，不因更名而迁移或删除。当前分支不回退读取旧环境变量；迁移时只改键名，不改原有值，见 [命名说明](docs/naming.md)。
 
-- 运行时选择：`TAPEFOX_BROWSER` 显式路径 → 可执行文件旁的 `runtime/chromium` → 系统 Chromium → 兼容旧安装的 Chrome。显式路径错误时不悄悄换浏览器。运行时须包含完整资源文件，不是单独复制一个可执行文件；当前发布脚本不会打包 Chromium 或 Widevine。
+- 运行时选择：`TAPLE_BROWSER` 显式路径 → 可执行文件旁的 `runtime/chromium` → 系统 Chromium → 兼容旧安装的 Chrome。显式路径错误时不悄悄换浏览器。运行时须包含完整资源文件，不是单独复制一个可执行文件；当前发布脚本不会打包 Chromium 或 Widevine。
 - 浏览器会话：Chromium 通过 `--remote-debugging-pipe` 私有管道通信，独立 profile 仍位于上述系统配置目录下的 `tapefox/apple-music/chrome`（Unix 权限 `0700`，Windows 使用当前用户独占 ACL），兼容旧会话路径。
 - 音频采样：Linux 下 VU 电平表通过 `parec` 读取 PulseAudio / PipeWire 的 `@DEFAULT_MONITOR@` 系统混音输出并计算 RMS dBFS。
 

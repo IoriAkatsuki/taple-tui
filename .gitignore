@@ -12,6 +12,8 @@ result/
 coverage.txt
 musicfox
 tapefox
+/taple
+/taple.exe
 taple-tui
 __debug*
 .slim/

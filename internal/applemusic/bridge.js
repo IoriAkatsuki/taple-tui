@@ -1,7 +1,7 @@
 async (request) => {
   if (location.origin !== 'https://music.apple.com') return {error: 'origin'};
   const mk = globalThis.MusicKit?.getInstance();
-  const cacheKey = Symbol.for('tapefox.appleMusicCache');
+  const cacheKey = Symbol.for('taple.appleMusicCache');
   let cache = globalThis[cacheKey];
   if (!mk || cache?.sdk !== mk || cache.storefront !== mk.storefrontId || cache.authorized !== !!mk.isAuthorized) {
     for (const entry of cache?.lyrics.values() || []) entry.abort.abort();

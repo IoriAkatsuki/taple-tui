@@ -1,5 +1,5 @@
-#ifndef TAPEFOX_TEST_WINDOWS_H
-#define TAPEFOX_TEST_WINDOWS_H
+#ifndef TAPLE_TEST_WINDOWS_H
+#define TAPLE_TEST_WINDOWS_H
 #include <stdint.h>
 #include <wchar.h>
 typedef void *HMODULE;

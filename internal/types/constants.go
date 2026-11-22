@@ -1,7 +1,7 @@
 package types
 
 var (
-	AppVersion = "v1.2.0"
+	AppVersion = "v2.0.0"
 	BuildTags  = ""
 )
 

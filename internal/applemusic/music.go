@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"strings"
 	"time"
 )
@@ -64,19 +65,62 @@ func scriptFor(request any) (string, error) {
 func (b *Browser) Snapshot(ctx context.Context) (State, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if b.launchDone != nil {
+		select {
+		case <-b.launchDone:
+			if b.launchErr != nil {
+				return State{}, b.launchErr
+			}
+		default:
+			return State{}, nil
+		}
+	}
 	b.lifecycle.RLock()
 	if b.stopped {
 		b.lifecycle.RUnlock()
 		return State{}, errors.New("播放器已关闭，请重新启动")
 	}
-	var s State
-	err := b.evaluate(ctx, map[string]string{"op": "snapshot"}, &s)
+	b.queueMu.Lock()
+	knownRev := b.lastQueueRev
+	knownTarget := b.lastQueueTarget
+	b.queueMu.Unlock()
+	curTarget := b.currentTarget()
+	req := map[string]any{"op": "snapshot"}
+	if knownRev > 0 && knownTarget != "" && knownTarget == curTarget {
+		req["knownQueueRev"] = knownRev
+	}
+	var snap struct {
+		State
+		QueueRev       int64 `json:"queueRev"`
+		QueueUnchanged bool  `json:"queueUnchanged"`
+	}
+	err := b.evaluate(ctx, req, &snap)
+	s := snap.State
+	if err == nil {
+		b.queueMu.Lock()
+		newTarget := b.currentTarget()
+		if snap.QueueUnchanged && snap.QueueRev > 0 && snap.QueueRev == b.lastQueueRev && s.Authorized == b.lastQueueAuth && s.Storefront == b.lastQueueStorefront && newTarget == knownTarget {
+			s.Queue = slices.Clone(b.lastQueue)
+		} else if snap.QueueRev > 0 {
+			b.lastQueueRev = snap.QueueRev
+			b.lastQueueTarget = newTarget
+			b.lastQueueStorefront = s.Storefront
+			b.lastQueueAuth = s.Authorized
+			b.lastQueue = slices.Clone(snap.Queue)
+		} else {
+			b.lastQueueRev = 0
+			b.lastQueue = nil
+		}
+		b.queueMu.Unlock()
+	}
 	visible := !b.background
 	closed := false
-	select {
-	case <-b.exited:
-		closed = true
-	default:
+	if b.exited != nil {
+		select {
+		case <-b.exited:
+			closed = true
+		default:
+		}
 	}
 	b.lifecycle.RUnlock()
 	if visible && (s.Authorized || closed) && ctx.Err() == nil {
@@ -118,6 +162,9 @@ func (b *Browser) Do(ctx context.Context, a Action) error {
 	}
 	if a.Kind == "logout" {
 		return b.logout(ctx)
+	}
+	if err := b.waitReady(ctx); err != nil {
+		return err
 	}
 	b.lifecycle.RLock()
 	defer b.lifecycle.RUnlock()

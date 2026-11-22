@@ -75,6 +75,10 @@ func appleVinylPlacement(x, y, w, rows int, aspect, amount float64) (deck.Rect, 
 
 func (p *AppleMusicPage) drawAlbumCrate(x, y, w, rows int, now time.Time) bool {
 	s, items := &p.screen, p.catalogState(p.drawer).catalog.items
+	if len(items) == 0 {
+		p.resetVinylPickup()
+		return p.drawDrawerEmpty(x, y, w, rows, now)
+	}
 	graphical := s.w >= 60 && s.h >= 20 && w >= 36 && rows >= 10
 	if !graphical {
 		p.resetVinylPickup()
@@ -127,7 +131,7 @@ func (p *AppleMusicPage) drawAlbumCrate(x, y, w, rows int, now time.Time) bool {
 		lbl := deck.VinylLabels[deck.VinylStyleForID(it.ID)-1]
 		footer = fmt.Sprintf("LP %02d [%s] · %s", p.vinylPickup.current+1, lbl.Name, it.Name)
 	}
-	s.text(x+3, y+rows-1, footer, uv.Style{Fg: s.pal.Secondary, Bg: color.RGBA{22, 34, 46, 255}}, w-6)
+	s.text(x+3, y+rows-1, footer, uv.Style{Fg: s.pal.Secondary, Bg: color.RGBA{24, 20, 28, 255}}, w-6)
 	return true
 }
 
@@ -145,20 +149,20 @@ func (p *AppleMusicPage) drawAlbumCrateSlots(x, y, w, rows, padding, capacity, d
 		}
 		item := items[i]
 		{
-			var labelBg color.Color = color.RGBA{29, 44, 58, 255}
-			if c := s.buf.CellAt(lx, ly); c != nil && c.Style.Bg != nil {
-				labelBg = c.Style.Bg
+			labelBg := color.RGBA{34, 28, 36, 255}
+			if c, ok := s.cellAt(lx, ly); ok && c.HasBg {
+				labelBg = c.Bg
 			}
 			room := p.vinylLabelRoom(x, y, w, rows, padding, ly, lx, lw, amount)
 			title := fmt.Sprintf("◉ %02d %s", i+1, item.Name)
 			if item.Artist != "" {
 				title += " · " + item.Artist
 			}
-			fg := color.Color(s.pal.Text)
+			fg := s.pal.Text
 			if i == desired {
 				fg = s.pal.Accent
 			}
-			s.text(lx, ly, title, uv.Style{Fg: fg, Bg: labelBg}, room)
+			s.textRGBA(lx, ly, title, fg, labelBg, true, true, false, room)
 		}
 		p.addHit(appleHit{kind: appleHitCatalog, x: x + 2, y: ly, w: w - 4, h: 2, index: i, id: item.ID, slot: appleBox(x+2, ly, w-4, 2)})
 	}

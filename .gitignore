@@ -53,3 +53,10 @@ cookie-exports/
 *-cookies.txt
 cookies-*.json
 cookies-*.txt
+
+# Local engineering specs and demo captures (kept locally outside release snapshots).
+design.md
+docs/linuxdo_post.md
+docs/assets/*.mp4
+*.mp4
+*.test

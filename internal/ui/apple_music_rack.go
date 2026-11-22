@@ -110,6 +110,13 @@ func (p *AppleMusicPage) drawList(x, y, w, rows int, now time.Time) {
 	if w < 8 || rows < 2 {
 		return
 	}
+	if p.listCount() == 0 {
+		p.rackGraphical = false
+		p.resetRackPickup()
+		if p.drawDrawerEmpty(x, y, w, rows, now) {
+			return
+		}
+	}
 	l := p.layoutRack(x, y, w, rows)
 	departed := p.syncRackPickup(l, now)
 	amount := p.rackPickup.pop.value(now)
@@ -236,7 +243,7 @@ func (p *AppleMusicPage) drawRackCabinet(l appleRackLayout, amount float64, now 
 			label = fmt.Sprintf("%02d [%s] · %s", pick.current.index+1, cs.Name, item.name)
 		}
 	}
-	p.screen.text(l.x+3, l.y+l.rows-1, label, uv.Style{Fg: p.screen.pal.Secondary, Bg: color.RGBA{22, 34, 46, 255}}, l.w-6)
+	p.screen.text(l.x+3, l.y+l.rows-1, label, uv.Style{Fg: p.screen.pal.Secondary, Bg: color.RGBA{24, 20, 28, 255}}, l.w-6)
 }
 
 // drawRackSlot prints one slot's spine label and records its hit area.
@@ -245,17 +252,17 @@ func (p *AppleMusicPage) drawRackSlot(l appleRackLayout, row int, amount float64
 	i := l.start + row
 	lx, ly, lw := deck.RackLabel(l.w, deck.RackState{Padding: l.padding}, row)
 	lx, ly = l.x+lx, l.y+ly
-	var labelBg color.Color = color.RGBA{29, 44, 58, 255}
-	if c := s.buf.CellAt(lx, ly); p.rackGraphical && c != nil && c.Style.Bg != nil {
-		labelBg = c.Style.Bg // print onto the ray-cast spine itself
+	labelBg := color.RGBA{34, 28, 36, 255}
+	if c, ok := s.cellAt(lx, ly); p.rackGraphical && ok && c.HasBg {
+		labelBg = c.Bg // print onto the ray-cast spine itself
 	}
 	if p.rackGraphical {
 		lw = p.rackLabelRoom(l, ly, lx, lw, amount)
 	}
 	if !p.rackGraphical {
 		lx, lw, labelBg = l.x+1, l.w-2, s.pal.Surface
-		s.fill(lx, ly, lw, 1, labelBg)
-		s.repeat(lx+1, ly+1, lw-1, "▔", uv.Style{Fg: s.pal.Rule})
+		s.fillRGBA(lx, ly, lw, 1, labelBg)
+		s.repeatRGBA(lx+1, ly+1, lw-1, "▔", s.pal.Rule, color.RGBA{}, true, false, false)
 	}
 	if i >= p.listCount() {
 		if row == 0 {
@@ -276,17 +283,13 @@ func (p *AppleMusicPage) drawRackSlot(l appleRackLayout, row int, amount float64
 	if item.detail != "" {
 		title += " · " + item.detail
 	}
-	st := uv.Style{Fg: s.pal.Text, Bg: labelBg}
-	if out || i == l.desired {
-		// Keep the title on the dark well after its physical spine lifts away.
-		st.Attrs = uv.AttrBold
-	}
+	bold := out || i == l.desired // Keep the title on the dark well after its physical spine lifts away.
 	indent := 0
 	if p.drawerTween.active(now) {
 		u := min(max((p.drawerTween.value(now)-float64(row)*.08)/.72, 0), 1)
 		indent = int(math.Round((1 - u) * 3))
 	}
-	s.text(lx+indent, ly, title, st, max(0, lw-indent))
+	s.textRGBA(lx+indent, ly, title, s.pal.Text, labelBg, true, true, bold, max(0, lw-indent))
 	fit, pose := appleRackPlacement(l.x, ly, l.w, l.rows, p.cellAspect, 0)
 	slot := appleBox(l.x+2, ly, l.w-4, 2)
 	p.addHit(appleHit{kind: item.kind, x: slot.Min.X, y: slot.Min.Y, w: slot.Dx(), h: slot.Dy(), index: i, id: item.id, cassette: fit, pose: pose, slot: slot})

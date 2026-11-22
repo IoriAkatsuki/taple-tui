@@ -3,19 +3,21 @@ package ui
 import (
 	"image/color"
 	"math"
+	"strings"
 	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/go-musicfox/go-musicfox/internal/applemusic"
 )
 
-// appleLyricLight is the soft lavender-white tint for unplayed lyric text.
-var appleLyricLight = color.RGBA{0xb8, 0xae, 0xd6, 0xff}
+// appleLyricLight is the warm vinyl-room parchment tint for unplayed lyric text.
+var appleLyricLight = color.RGBA{0xc8, 0xbc, 0xb0, 0xff}
 
 var appleParticleRunes = [4]string{"✦", "✧", "⋆", "·"}
 
 // drawLyricActiveRow renders an active (currently playing) lyric row with
-// real-progress split coloring (sung Hero vs unplayed light), a glowing
-// wavefront cursor, and trailing stardust particles.
+// real-clock syllable/word span illumination when TTML <span> timing is present
+// or line-progress split coloring otherwise, plus warm tungsten wavefront & particles.
 func (p *AppleMusicPage) drawLyricActiveRow(x, y, w int, row appleLyricRow, position time.Duration, reveal float64) {
 	line := p.lyrics.data.Lines[row.line]
 	span := max(line.End-line.Start, time.Millisecond)
@@ -27,7 +29,7 @@ func (p *AppleMusicPage) drawLyricActiveRow(x, y, w int, row appleLyricRow, posi
 		textX, textW = x+1, w-1
 	}
 	baseBg := npLerp(appleNeon.Bg, appleNeon.Surface, .62*reveal)
-	glowBg := npLerp(appleNeon.Bg, color.RGBA{0x2b, 0x12, 0x44, 0xff}, .85*reveal)
+	glowBg := npLerp(appleNeon.Bg, color.RGBA{0x38, 0x20, 0x1d, 0xff}, .85*reveal)
 	if w >= 12 {
 		p.screen.set(railX, y, "┃", 1, uv.Style{Fg: npLerp(appleNeon.Bg, appleNeon.Accent, reveal), Bg: glowBg, Attrs: uv.AttrBold})
 	}
@@ -43,6 +45,11 @@ func (p *AppleMusicPage) drawLyricActiveRow(x, y, w int, row appleLyricRow, posi
 	str := npSanitize(row.text)
 	totalCols := min(npWidth(str), bodyW)
 	litCols := int(math.Round(float64(totalCols) * rowProg))
+	waveActive := rowProg > 0 && rowProg < 1
+	if len(line.Spans) > 0 {
+		litCols = appleSpanLitCols(line, row.colOffset, position, totalCols)
+		waveActive = position > line.Start && position < line.End
+	}
 	for i := 0; i < min(litCols+1, bodyW); i++ {
 		p.screen.set(bodyX+i, y, " ", 1, uv.Style{Bg: glowBg})
 	}
@@ -62,13 +69,42 @@ func (p *AppleMusicPage) drawLyricActiveRow(x, y, w int, row appleLyricRow, posi
 		switch {
 		case col+cw <= litCols:
 			fg, cellBg, attrs = appleNeon.Hero, glowBg, uv.AttrBold
-		case col <= litCols && rowProg > 0 && rowProg < 1:
-			fg, cellBg, attrs = appleNeon.Accent, npLerp(glowBg, appleNeon.Accent, .24*reveal), uv.AttrBold
+		case col <= litCols && waveActive && litCols > 0:
+			fg, cellBg, attrs = appleNeon.Accent2, npLerp(glowBg, appleNeon.Hero, .22*reveal), uv.AttrBold
 		}
 		p.screen.set(bodyX+col, y, cl, cw, uv.Style{Fg: npLerp(appleNeon.Bg, fg, reveal), Bg: cellBg, Attrs: attrs})
 		col += cw
 	}
 	p.drawLyricParticles(bodyX+col, y, bodyX+bodyW, row.line, lineProg, reveal, baseBg, glowBg)
+}
+
+func appleSpanLitCols(line applemusic.LyricLine, rowColOffset int, position time.Duration, totalCols int) int {
+	cleanLine := npSanitize(line.Text)
+	searchFrom := 0
+	lineLitCols := 0
+	for _, sp := range line.Spans {
+		target := npSanitize(sp.Text)
+		if target == "" {
+			continue
+		}
+		idx := strings.Index(cleanLine[searchFrom:], target)
+		if idx < 0 {
+			continue
+		}
+		startCol := npWidth(cleanLine[:searchFrom+idx])
+		endCol := npWidth(cleanLine[:searchFrom+idx+len(target)])
+		searchFrom += idx + len(target)
+		if position >= sp.End {
+			lineLitCols = endCol
+			continue
+		}
+		if position > sp.Start {
+			u := float64(position-sp.Start) / float64(max(sp.End-sp.Start, time.Millisecond))
+			lineLitCols = startCol + int(math.Round(float64(endCol-startCol)*u))
+		}
+		break
+	}
+	return min(max(lineLitCols-rowColOffset, 0), totalCols)
 }
 
 // drawLyricParticles scatters deterministic stardust glyphs in the trailing
@@ -92,9 +128,9 @@ func (p *AppleMusicPage) drawLyricParticles(startX, y, maxX, lineIdx int, prog, 
 		case 0:
 			fg, bg = appleNeon.Accent2, glowBg
 		case 1:
-			fg = appleNeon.Accent
-		case 2:
 			fg = appleNeon.Hero
+		case 2:
+			fg = appleNeon.Accent
 		default:
 			fg = appleLyricLight
 		}

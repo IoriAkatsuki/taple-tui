@@ -24,6 +24,23 @@ func TestAppleTTMLPreservesRealLineTimesAndMixedText(t *testing.T) {
 	if got.Lines[1].Start != 11500*time.Millisecond || got.Lines[1].End != 13*time.Second {
 		t.Fatal("overlapping timed line or explicit duration was lost")
 	}
+	if len(got.Lines[0].Spans) != 1 || got.Lines[0].Spans[0].Text != "夜行" || got.Lines[0].Spans[0].Start != 10200*time.Millisecond || got.Lines[0].Spans[0].End != 11*time.Second {
+		t.Fatalf("unexpected timed spans: %+v", got.Lines[0].Spans)
+	}
+}
+
+func TestAppleTTMLIgnoresMalformedSpansWithoutRejectingValidLine(t *testing.T) {
+	xml := `<tt><body><p begin="10s" end="15s"><span begin="BAD" end="11s">alpha</span> <span begin="11s" dur="2s">beta</span> <span begin="14s" end="13s">backwards</span></p></body></tt>`
+	got, err := parseLyricsTTML(xml)
+	if err != nil {
+		t.Fatalf("valid line rejected due to span timing: %v", err)
+	}
+	if len(got.Lines) != 1 || got.Lines[0].Text != "alpha beta backwards" {
+		t.Fatalf("unexpected text: %+v", got.Lines)
+	}
+	if len(got.Lines[0].Spans) != 1 || got.Lines[0].Spans[0].Text != "beta" || got.Lines[0].Spans[0].End != 13*time.Second {
+		t.Fatalf("expected only valid dur span, got %+v", got.Lines[0].Spans)
+	}
 }
 
 func TestAppleTTMLAcceptsWebsiteBareSecondTimes(t *testing.T) {

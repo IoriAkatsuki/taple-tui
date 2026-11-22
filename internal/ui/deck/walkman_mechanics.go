@@ -144,9 +144,9 @@ func (r *WalkmanRenderer) RenderWalkman(v View, pal Palette, pose Pose, st Walkm
 		cassette: scene{m: &m, rot: cassetteRot, radii: st.Radii, angles: st.Angles, blur: st.Blur, lObj: cassetteRot.applyT(keyLight), detail: detail}}
 	if st.StorageCover > 0 {
 		sc.storage = &materials{
-			bg: m.bg, hero: rgb{188, 205, 214}, shell: rgb{38, 55, 69}, label: rgb{55, 72, 84},
-			ink: rgb{188, 205, 214}, stripe: rgb{72, 109, 122}, glass: rgb{16, 29, 39}, tape: rgb{25, 38, 47},
-			hub: rgb{148, 168, 180}, hole: rgb{9, 17, 25}, clamp: rgb{72, 109, 122}, screw: rgb{118, 139, 153},
+			bg: m.bg, hero: rgb{196, 188, 178}, shell: rgb{42, 34, 44}, label: rgb{58, 46, 56},
+			ink: rgb{196, 188, 178}, stripe: rgb{92, 76, 82}, glass: rgb{18, 15, 24}, tape: rgb{28, 22, 30},
+			hub: rgb{162, 152, 144}, hole: rgb{10, 9, 14}, clamp: rgb{92, 76, 82}, screw: rgb{128, 116, 112},
 		}
 	}
 	if st.FlightFrom.W > 0 && st.FlightFrom.H > 0 && st.Flight < 1 {
@@ -310,7 +310,7 @@ func (sc *walkmanScene) sample(o, d, view vec3) (rgb, mat, bool) {
 			} else {
 				c = rgb{148, 160, 178}
 				if sc.st.Keys&(1<<i) != 0 {
-					c = rgb{255, 43, 214}
+					c = rgb{255, 107, 74}
 				} else if h.n.y > -.5 {
 					c = c.scale(.65)
 				}
@@ -346,7 +346,7 @@ func (sc *walkmanScene) sample(o, d, view vec3) (rgb, mat, bool) {
 				if sc.st.Keys&KeyPlay != 0 {
 					glow = .6
 				}
-				c = c.mix(rgb{0, 229, 255}, glow)
+				c = c.mix(rgb{46, 216, 198}, glow)
 			}
 		case u >= 8.8 && u <= 37.2 && v >= 18.0 && v <= 38.0:
 			// Molded charcoal vertical window bezel surrounding the glass.

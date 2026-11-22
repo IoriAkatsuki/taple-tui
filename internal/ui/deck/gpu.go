@@ -83,17 +83,32 @@ func (g *GPU) render(v View, cam camera, pose Pose, sc *walkmanScene, frame *Fra
 	if g.err = g.device.Compute(p[:], g.samples); g.err != nil {
 		return false
 	}
-	var px [8]rgb
-	for i := range bounds.Dx() * bounds.Dy() {
-		covered := false
-		for j := 0; j < gc*gr; j++ {
-			at := (i*gc*gr + j) * 4
-			px[j] = rgb{float64(g.samples[at]), float64(g.samples[at+1]), float64(g.samples[at+2])}
-			covered = covered || g.samples[at+3] > 0
+	bw, bh := bounds.Dx(), bounds.Dy()
+	fitRow := func(start, end int, out *[8]rgb) {
+		for row := start; row < end; row++ {
+			y := bounds.Min.Y + row
+			for col := range bw {
+				i := row*bw + col
+				covered := false
+				for j := 0; j < gc*gr; j++ {
+					at := (i*gc*gr + j) * 4
+					out[j] = rgb{float64(g.samples[at]), float64(g.samples[at+1]), float64(g.samples[at+2])}
+					covered = covered || g.samples[at+3] > 0
+				}
+				if covered {
+					frame.Cells[y*v.W+bounds.Min.X+col] = fitCell(out[:gc*gr], v.Tier)
+				}
+			}
 		}
-		if covered {
-			frame.Cells[(bounds.Min.Y+i/bounds.Dx())*v.W+bounds.Min.X+i%bounds.Dx()] = fitCell(px[:gc*gr], v.Tier)
-		}
+	}
+	if bw*bh < 1200 {
+		var px [8]rgb
+		fitRow(0, bh, &px)
+	} else {
+		parallel(bh, func(start, end int) {
+			var localPx [8]rgb
+			fitRow(start, end, &localPx)
+		})
 	}
 	return true
 }

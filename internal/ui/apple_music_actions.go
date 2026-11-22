@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/go-musicfox/go-musicfox/internal/applemusic"
+	"github.com/go-musicfox/go-musicfox/internal/ui/deck"
 )
 
 type appleActionMsg struct {
@@ -65,6 +67,8 @@ func (p *AppleMusicPage) dispatch(action applemusic.Action) tea.Cmd {
 		for len(p.operations) > 0 && appleDirectPlayback(p.operations[len(p.operations)-1].action.Kind) {
 			p.operations = p.operations[:len(p.operations)-1]
 		}
+	} else if (action.Kind == "volume" || action.Kind == "seek") && len(p.operations) > 0 && p.operations[len(p.operations)-1].action.Kind == action.Kind {
+		p.operations = p.operations[:len(p.operations)-1]
 	}
 	p.operations = append(p.operations, appleOperation{action: action, generation: p.generation, queuedAt: time.Now()})
 	return p.nextOperation()
@@ -113,7 +117,7 @@ func (p *AppleMusicPage) nextOperation() tea.Cmd {
 		} else {
 			err = p.client.Do(p.ctx, action)
 		}
-		if err == nil && appleTrackOperation(action.Kind) {
+		if err == nil && (appleTrackOperation(action.Kind) || action.Kind == "seek") {
 			// Bound best-effort read-back within the serial queue; polling recovers on failure.
 			ctx, cancel := context.WithTimeout(p.ctx, 250*time.Millisecond)
 			defer cancel()
@@ -130,6 +134,7 @@ func (p *AppleMusicPage) acceptAction(m appleActionMsg, now time.Time) tea.Cmd {
 	p.busy = false
 	if m.operation.action.Kind == "logout" {
 		p.loggingOut = false
+		p.windUntil, p.windDir = time.Time{}, 0
 		p.pollEpoch++
 		p.panel, p.hits = "", nil
 		p.status = T("account.cleared")
@@ -166,9 +171,25 @@ func (p *AppleMusicPage) acceptAction(m appleActionMsg, now time.Time) tea.Cmd {
 	if m.operation.generation == p.playGeneration && errors.Is(m.err, applemusic.ErrPlaybackUnavailable) {
 		p.failPlayback(m.err.Error())
 	}
-	if m.operation.generation == p.playGeneration && m.after != nil {
+	if m.operation.generation == p.playGeneration && m.after != nil && appleTrackOperation(m.operation.action.Kind) {
 		p.acceptState(*m.after, now)
 		cmd = tea.Batch(p.loadLyrics(false), p.ensureLibrary())
+	} else if m.err == nil && !m.notSent && (m.operation.action.Kind == "seek" || m.operation.action.Kind == "seek-relative") && m.after != nil && m.operation.generation >= p.playGeneration {
+		if m.after.Track.ID == m.operation.action.ID {
+			p.pollEpoch++
+			prevPos := p.state.Position
+			if m.before != nil {
+				prevPos = m.before.Position
+			}
+			delta := m.after.Position - prevPos
+			p.acceptState(*m.after, now)
+			if p.ready() && math.Abs(delta) >= 0.5 && m.after.Track.Duration > 0 {
+				from := min(max(prevPos/m.after.Track.Duration, 0), 1)
+				to := min(max(m.after.Position/m.after.Track.Duration, 0), 1)
+				dur := deck.WindDuration(time.Duration(delta * float64(time.Second)))
+				p.startSeekWind(delta, from, to, dur, now)
+			}
+		}
 	}
 	return tea.Batch(p.nextOperation(), cmd)
 }

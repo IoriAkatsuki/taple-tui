@@ -16,8 +16,8 @@ An Apple Music TUI player for desktop systems, supporting Linux, Windows, and ma
 
 - Catalog search and browse: search songs, albums, and artists; open artist → album → track hierarchies; paginate results; append tracks to the queue or jump within the first 50 queue entries.
 - Personal library: browse and play playlists, albums, songs, recommendation groups, and the personal station. Press `P` to play a full album or playlist in order. Confirmed playback enables native Apple Music autoplay.
-- 3D storage crates and deck: songs and queues use a dual-row cassette rack (single half-peek, shell style assigned on pickup); albums use a vinyl LP crate; playlists and artists use a 3D hinged dossier folder crate. The desk stage shifts across dawn, day, sunset, and night.
-- Synced lyrics and metering: track changes load TTML lyrics with smooth roller scrolling and an active particle wavefront. The bottom deck shows a Nixie time counter and a dual-channel dBFS VU meter.
+- 3D storage crates and cozy empty states: songs and queues use a dual-row cassette rack (single half-peek, shell style assigned on pickup); albums use a vinyl LP crate; playlists and artists use a 3D hinged dossier folder crate. The Tokyo window desk stage shifts across dawn, day, sunset, and night, while empty drawers/lyrics/sign-in gates feature an interactive animated desk companion.
+- Synced lyrics, winding, and metering: track changes load TTML lyrics with syllable-level span progress, smooth scrolling, and an active wavefront; confirmed seeks drive real reel winding; the instrument pod shows a Nixie time counter and a peak-hold dBFS VU meter.
 
 | Cassette rack pickup and insertion | Library crates (Vinyl LP / 3D Folder / Queue) |
 | :---: | :---: |

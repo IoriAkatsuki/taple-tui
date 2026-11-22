@@ -68,3 +68,19 @@ func TestCounterDrawDoesNotAdvanceState(t *testing.T) {
 		t.Fatal("rendering advanced counter state")
 	}
 }
+
+func TestMeterAvoidsDoubleDBFSAndDrawsRealPeakHold(t *testing.T) {
+	s := widgetScreen(40, 4)
+	drawLEDMeterPeaks(s, 0, 0, 40, "VU METER · dBFS", applemusic.MeterFrame{Ready: true, Levels: [2]float64{.25, .25}}, [2]float64{.75, .75})
+	out := ansi.Strip(s.render())
+	if strings.Contains(out, "dBFS  dBFS") || !strings.Contains(out, "VU METER · dBFS") {
+		t.Fatalf("unexpected meter header: %q", out)
+	}
+	peakCell := s.buf.CellAt(2+11*2, 2)
+	if peakCell == nil || peakCell.Content != "▐" {
+		t.Fatalf("expected peak-hold marker at segment 11, got %+v", peakCell)
+	}
+	if s.buf.CellAt(2+11*2+1, 2).Content != " " {
+		t.Fatal("peak marker must preserve segment gap")
+	}
+}

@@ -1,6 +1,7 @@
 package applemusic
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -358,4 +359,83 @@ func TestAppleMusicLoginHandover(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	}
 	t.Fatal("login handover timed out")
+}
+
+func TestBrowserDeltaQueueSnapshotPreservesCachedQueue(t *testing.T) {
+	inR, inW := io.Pipe()
+	outR, outW := io.Pipe()
+	b := &Browser{pipe: newPipe(inR, outW), background: true, target: "page1", session: "sess1"}
+	defer func() {
+		b.Close()
+		b.pipe.close()
+		_ = inW.Close()
+		_ = outR.Close()
+	}()
+
+	type evalPayload struct {
+		Data any `json:"data"`
+	}
+	respond := func(id int, data any) {
+		val, _ := json.Marshal(evalPayload{Data: data})
+		resp, _ := json.Marshal(map[string]any{
+			"id": id,
+			"result": map[string]any{
+				"result": map[string]any{"value": json.RawMessage(val)},
+			},
+		})
+		_, _ = inW.Write(append(resp, 0))
+	}
+
+	go func() {
+		dec := bufio.NewScanner(outR)
+		dec.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+			if n := bytes.IndexByte(data, 0); n >= 0 {
+				return n + 1, data[:n], nil
+			}
+			return 0, nil, nil
+		})
+		for dec.Scan() {
+			var req struct {
+				ID     int            `json:"id"`
+				Method string         `json:"method"`
+				Params map[string]any `json:"params"`
+			}
+			_ = json.Unmarshal(dec.Bytes(), &req)
+			if req.Method == "Target.getTargets" {
+				res, _ := json.Marshal(map[string]any{"id": req.ID, "result": map[string]any{
+					"targetInfos": []map[string]any{{"targetId": "page1", "type": "page", "url": "https://music.apple.com/us/home"}},
+				}})
+				_, _ = inW.Write(append(res, 0))
+				continue
+			}
+			if req.Method == "Target.attachToTarget" {
+				res, _ := json.Marshal(map[string]any{"id": req.ID, "result": map[string]any{"sessionId": "sess1"}})
+				_, _ = inW.Write(append(res, 0))
+				continue
+			}
+			expr, _ := req.Params["expression"].(string)
+			if strings.Contains(expr, `"knownQueueRev":42`) {
+				respond(req.ID, map[string]any{
+					"ready": true, "authorized": true, "storefront": "us",
+					"queueRev": 42, "queueUnchanged": true, "queueTotal": 1,
+				})
+			} else {
+				respond(req.ID, map[string]any{
+					"ready": true, "authorized": true, "storefront": "us",
+					"queueRev": 42, "queueTotal": 1,
+					"queue": []Track{{ID: "t1", Name: "Plastic Love"}},
+				})
+			}
+		}
+	}()
+
+	ctx := context.Background()
+	s1, err := b.Snapshot(ctx)
+	if err != nil || len(s1.Queue) != 1 || s1.Queue[0].Name != "Plastic Love" {
+		t.Fatalf("first snapshot mismatch: %+v, err=%v", s1, err)
+	}
+	s2, err := b.Snapshot(ctx)
+	if err != nil || len(s2.Queue) != 1 || s2.Queue[0].Name != "Plastic Love" {
+		t.Fatalf("delta snapshot failed to restore queue: %+v, err=%v", s2, err)
+	}
 }

@@ -93,6 +93,9 @@ func (b *Browser) Catalog(ctx context.Context, q CatalogRequest) (CatalogPage, e
 			return CatalogPage{}, errors.New("无效的 Apple Music 曲库分页")
 		}
 	}
+	if err := b.waitReady(ctx); err != nil {
+		return CatalogPage{}, err
+	}
 	b.lifecycle.RLock()
 	defer b.lifecycle.RUnlock()
 	if b.stopped {

@@ -28,11 +28,11 @@ type CassetteStyle struct {
 }
 
 var CassetteStyles = [5]CassetteStyle{
-	{"LASER", color.RGBA{26, 16, 32, 255}, color.RGBA{18, 10, 26, 255}, color.RGBA{255, 43, 214, 255}, color.RGBA{0, 229, 255, 255}, .22, PatternLaser, "╱", "TYPE II · CrO₂"},
-	{"GRID", color.RGBA{14, 42, 51, 255}, color.RGBA{154, 163, 184, 255}, color.RGBA{0, 229, 255, 255}, color.RGBA{255, 43, 214, 255}, .28, PatternGrid, "┼", "METAL · TYPE IV"},
-	{"NIXIE", color.RGBA{58, 36, 8, 255}, color.RGBA{20, 14, 6, 255}, color.RGBA{255, 176, 0, 255}, color.RGBA{255, 43, 214, 255}, .25, PatternNixie, "▪", "TYPE I · NORMAL"},
-	{"X-RAY", color.RGBA{200, 208, 224, 255}, color.RGBA{240, 236, 228, 255}, color.RGBA{0, 229, 255, 255}, color.RGBA{255, 43, 214, 255}, .68, PatternXRay, "┊", "CrO₂ · C60"},
-	{"OUTRUN", color.RGBA{232, 224, 208, 255}, color.RGBA{244, 239, 230, 255}, color.RGBA{255, 43, 214, 255}, color.RGBA{255, 176, 0, 255}, 0, PatternOutrun, "≡", "HIGH BIAS · C90"},
+	{"SHIBUYA", color.RGBA{28, 22, 34, 255}, color.RGBA{22, 18, 28, 255}, color.RGBA{255, 107, 74, 255}, color.RGBA{46, 216, 198, 255}, .20, PatternLaser, "╱", "TYPE II · CrO₂"},
+	{"CHROME", color.RGBA{26, 36, 48, 255}, color.RGBA{196, 202, 212, 255}, color.RGBA{46, 216, 198, 255}, color.RGBA{255, 107, 74, 255}, .26, PatternGrid, "┼", "METAL · TYPE IV"},
+	{"NIXIE", color.RGBA{54, 34, 14, 255}, color.RGBA{22, 16, 10, 255}, color.RGBA{245, 185, 66, 255}, color.RGBA{255, 107, 74, 255}, .24, PatternNixie, "▪", "TYPE I · NORMAL"},
+	{"X-RAY", color.RGBA{214, 208, 198, 255}, color.RGBA{244, 236, 222, 255}, color.RGBA{46, 216, 198, 255}, color.RGBA{255, 107, 74, 255}, .68, PatternXRay, "┊", "CrO₂ · C60"},
+	{"CITYPOP", color.RGBA{236, 226, 208, 255}, color.RGBA{244, 236, 222, 255}, color.RGBA{255, 107, 74, 255}, color.RGBA{245, 185, 66, 255}, 0, PatternOutrun, "≡", "HIGH BIAS · C90"},
 }
 
 func cassetteMaterials(p Palette, style uint8, trackNum int) materials {
@@ -76,16 +76,16 @@ func cassetteLabelAt(m *materials, u, v, detail float64) faceSample {
 	case PatternXRay:
 		switch {
 		case v >= 11 && v < 11.9:
-			c, material = rgb{255, 59, 92}, matStripe
+			c, material = rgb{255, 107, 74}, matStripe
 		case v >= 11.9 && v < 12.8:
-			c, material = rgb{255, 210, 63}, matStripe
+			c, material = rgb{245, 185, 66}, matStripe
 		case v >= 12.8 && v <= 13.7:
 			c, material = m.ink, matInk
 		}
 	case PatternOutrun:
 		if v >= 6 && v <= 14 && !(v >= 9.2 && v <= 9.8 || v >= 11.2 && v <= 11.8 || v >= 13 && v <= 13.5) {
 			t := (v - 6) / 8
-			orange := rgb{255, 107, 0}
+			orange := rgb{255, 118, 56}
 			c = m.ink.mix(orange, t*2)
 			if t > .5 {
 				c = orange.mix(m.stripe, (t-.5)*2)

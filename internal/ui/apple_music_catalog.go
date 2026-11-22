@@ -250,15 +250,20 @@ func (p *AppleMusicPage) drawCatalogTabs(x, y, w int, kinds []string, keys []str
 		}
 		hovered := p.hoverX >= cx && p.hoverX < cx+tabW && p.hoverY == y
 		if active {
-			p.screen.set(cx, y, "▍", 1, uv.Style{Fg: appleNeon.Accent, Bg: appleNeon.Surface})
-			p.screen.text(cx+1, y, body, uv.Style{Fg: appleNeon.Text, Bg: appleNeon.Surface, Attrs: uv.AttrBold}, tabW-1)
+			p.screen.setRGBA(cx, y, "▐", 1, appleNeon.Hero, appleNeon.Surface, true, true, false)
+			tw := p.screen.textRGBA(cx+1, y, body, appleNeon.Text, color.RGBA{0x2b, 0x23, 0x35, 0xff}, true, true, true, tabW-1)
+			if cx+1+tw < x+w {
+				p.screen.setRGBA(cx+1+tw, y, "▌", 1, appleNeon.Accent2, color.RGBA{}, true, false, false)
+			}
 		} else {
-			fg := color.Color(appleNeon.Secondary)
+			tabBg := color.RGBA{0x18, 0x15, 0x20, 0xff}
+			fg := appleNeon.Secondary
 			if hovered {
 				fg = appleNeon.Hero
+				tabBg = appleNeon.Surface
 			}
-			p.screen.set(cx, y, " ", 1, uv.Style{Fg: appleNeon.Rule})
-			p.screen.text(cx+1, y, body, uv.Style{Fg: fg}, tabW-1)
+			p.screen.setRGBA(cx, y, "▎", 1, appleNeon.Rule, tabBg, true, true, false)
+			p.screen.textRGBA(cx+1, y, body, fg, tabBg, true, true, hovered, tabW-1)
 		}
 		p.addHit(appleHit{kind: appleHitKey, x: cx, y: y, w: tabW, h: 1, key: k.key})
 		cx += tabW + 1

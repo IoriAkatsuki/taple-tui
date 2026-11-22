@@ -16,9 +16,15 @@ type LyricsRequest struct {
 	Refresh    bool   `json:"refresh,omitempty"`
 }
 
+type LyricSpan struct {
+	Text       string
+	Start, End time.Duration
+}
+
 type LyricLine struct {
 	Text       string
 	Start, End time.Duration
+	Spans      []LyricSpan
 }
 
 type Lyrics struct {
@@ -34,6 +40,9 @@ func (b *Browser) Lyrics(ctx context.Context, q LyricsRequest) (Lyrics, error) {
 		if value == "" || len(value) > 256 || !utf8.ValidString(value) || strings.IndexFunc(value, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 || value == "." || value == ".." {
 			return result, errors.New("无效的歌词曲目或地区")
 		}
+	}
+	if err := b.waitReady(ctx); err != nil {
+		return result, err
 	}
 	b.lifecycle.RLock()
 	defer b.lifecycle.RUnlock()

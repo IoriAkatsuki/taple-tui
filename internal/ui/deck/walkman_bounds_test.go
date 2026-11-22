@@ -3,14 +3,14 @@ package deck
 import "testing"
 
 func TestWalkmanClippingKeepsReferencePixels(t *testing.T) {
-	// Digests verified against the uncropped CPU renderer after removing housing logos.
+	// Digests verified after updating window rim/key glow and Japanese tape palettes.
 	want := []string{
-		"f95488d66bd96e359143dc2d314c7371927bb4d4e962c630a24e59ce8c7b2372",
-		"b62a0bc1f8809b2e758dac7ff96bc773b7f827a62d0d3339622fa842bf63955f",
-		"4c7f15c9d871ab4f50f6c8b34d3f594ae51970ccba65656e89fce334498737f7",
-		"82456bc9603484b1adbf8dd90127398e5410a0ed37721e8753d69b265170072d",
-		"c6603c455d9143267c06e4c68a174a1f2e075d02bb5e0b5c4de4a1348c570e7b",
-		"7986395c85ad246087002a3bdc6206eee20811bdba747cd9af896e49c97aa644",
+		"9fad594ae8150f3df61a53699480f62f9b731eaa4806b069543c2d0fd8d6a9ac",
+		"8cbbb5d2c867c06a4b03a004c55f5bbd971c612133c674661e88526ee013103f",
+		"36e2bede23e0ce838e26631836d15309411a7b6dac185dc7ca1df47e8d40c54a",
+		"d21ecc200d405949f29960359c8c88962a0457f9627de44ad908680d84e5dd23",
+		"0d3474ef4079497f01d678752c19c7606c817c4c21922453532eee84e0b427e2",
+		"5e3485551d5de0be3b9dfb23889bc66736e45c759dc305eff89126530c3961ba",
 	}
 	for i := range want {
 		v := View{W: 140, H: 36, Tier: Octant, Aspect: 2}

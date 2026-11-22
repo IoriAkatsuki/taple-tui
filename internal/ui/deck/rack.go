@@ -48,7 +48,7 @@ const (
 	rackOX     = .22
 	rackOY     = .30
 	rackTop    = 1.7 // the highest relief, in columns
-	rackStep   = .07
+	rackStep   = .14
 	rackShadow = .52
 )
 
@@ -158,7 +158,7 @@ func (sc *rackScene) march(fx, fy float64) (x, y, h float64, m rackMat) {
 		hh, mm := sc.height(x, y)
 		if hh >= t {
 			lo, hi := t, prev
-			for range 3 {
+			for range 4 {
 				mid := (lo + hi) / 2
 				if hm, _ := sc.height(fx-mid*rackOX, fy-mid*rackOY); hm >= mid {
 					lo = mid
@@ -185,13 +185,16 @@ func (sc *rackScene) shade(fx, fy float64) rgb {
 	hy0, _ := sc.height(x, y-e/sc.aspect)
 	hy1, _ := sc.height(x, y+e/sc.aspect)
 	n := vec3{-(hx1 - hx0) / (2 * e), -(hy1 - hy0) / (2 * e), -1}.norm()
-	diffuse := ambient + (1-ambient)*max(n.dot(keyLight), 0)/-keyLight.z
+	ndotl := max(n.dot(keyLight), 0)
+	diffuse := ambient + (1-ambient)*ndotl/-keyLight.z
 	// Shadow: walk towards the light and look for relief above the ray.
-	lx, ly := keyLight.x/-keyLight.z, keyLight.y/-keyLight.z/sc.aspect
-	for t := .12; h+t < rackTop; t += .12 {
-		if hh, _ := sc.height(x+lx*t, y+ly*t); hh > h+t+.02 {
-			diffuse *= rackShadow
-			break
+	if ndotl > 0 {
+		lx, ly := keyLight.x/-keyLight.z, keyLight.y/-keyLight.z/sc.aspect
+		for t := .12; h+t < rackTop; t += .12 {
+			if hh, _ := sc.height(x+lx*t, y+ly*t); hh > h+t+.02 {
+				diffuse *= rackShadow
+				break
+			}
 		}
 	}
 	albedo := sc.colors[m]
@@ -248,13 +251,13 @@ func (r *RackRenderer) RenderRack(v View, pal Palette, st RackState) *Frame {
 	sc := rackScene{w: float64(w), rows: float64(h), st: st, aspect: v.Aspect,
 		tab: rgbOf(st.TabColor), flash: rgbOf(pal.Hero)}
 	sc.colors = [7]rgb{
-		rackBack:   {12, 23, 34},
-		rackRail:   {43, 64, 80},
-		rackLip:    {55, 72, 84},
-		rackSpine:  {38, 55, 69},
-		rackLabel:  {29, 44, 58},
-		rackTabMat: {42, 62, 78},
-		rackMouth:  {10, 18, 28},
+		rackBack:   {18, 15, 22},
+		rackRail:   {88, 62, 44},
+		rackLip:    {124, 90, 58},
+		rackSpine:  {48, 38, 46},
+		rackLabel:  {34, 28, 36},
+		rackTabMat: {68, 52, 56},
+		rackMouth:  {12, 10, 16},
 	}
 	gc, gr := v.Tier.Grid()
 	parallel(hi-lo, func(start, end int) {

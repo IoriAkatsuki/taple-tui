@@ -12,6 +12,7 @@ import (
 	"github.com/anhoder/foxful-cli/motion"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/go-musicfox/go-musicfox/internal/applemusic"
+	"github.com/go-musicfox/go-musicfox/internal/ui/deck"
 )
 
 func TestAppleMusicSelectedCollectionTrackKeepsQueueContext(t *testing.T) {
@@ -176,5 +177,70 @@ func TestAppleMusicAutoplayPanelShowsBackendState(t *testing.T) {
 			t.Fatalf("panel hid native autoplay state %q", tc.want)
 		}
 		p.Close()
+	}
+}
+
+type appleSeekWindClient struct {
+	state     applemusic.State
+	snapshots []applemusic.State
+	actions   []applemusic.Action
+}
+
+func (c *appleSeekWindClient) Snapshot(context.Context) (applemusic.State, error) {
+	if len(c.snapshots) > 0 {
+		s := c.snapshots[0]
+		c.snapshots = c.snapshots[1:]
+		return s, nil
+	}
+	return c.state, nil
+}
+func (*appleSeekWindClient) Catalog(context.Context, applemusic.CatalogRequest) (applemusic.CatalogPage, error) {
+	return applemusic.CatalogPage{}, nil
+}
+func (*appleSeekWindClient) Lyrics(context.Context, applemusic.LyricsRequest) (applemusic.Lyrics, error) {
+	return applemusic.Lyrics{}, nil
+}
+func (c *appleSeekWindClient) Do(_ context.Context, a applemusic.Action) error {
+	c.actions = append(c.actions, a)
+	return nil
+}
+func (*appleSeekWindClient) Show(context.Context) error { return nil }
+
+func TestAppleMusicConfirmedSeekTriggersWindAndKeys(t *testing.T) {
+	base := applemusic.State{
+		Ready: true, Authorized: true, Full: true, Playing: true,
+		Track:    applemusic.Track{ID: "track-1", Name: "Seek Track", Duration: 120},
+		Position: 40,
+	}
+	afterFF := base
+	afterFF.Position = 55
+	afterRew := base
+	afterRew.Position = 20
+
+	c := &appleSeekWindClient{
+		state:     base,
+		snapshots: []applemusic.State{base, afterFF, afterFF, afterRew},
+	}
+	p := NewAppleMusicPage(c)
+	defer p.Close()
+	p.level = motion.Full
+	app := model.NewApp(model.DefaultOptions())
+	now := time.Now()
+	p.acceptState(base, now)
+
+	cmd := p.dispatch(applemusic.Action{Kind: "seek", ID: "track-1", Value: 55})
+	msg := cmd()
+	p.Update(msg, app)
+	st := p.mechanics(time.Now())
+	if st.Keys&deck.KeyFF == 0 || !p.reels.Winding(time.Now()) {
+		t.Fatalf("confirmed forward seek did not engage KeyFF and tape wind: keys=%v", st.Keys)
+	}
+
+	c.state = afterFF
+	cmd2 := p.dispatch(applemusic.Action{Kind: "seek", ID: "track-1", Value: 20})
+	p.Update(cmd2(), app)
+	st2 := p.mechanics(time.Now())
+	if st2.Keys&deck.KeyRew == 0 {
+		t.Fatalf("confirmed backward seek did not engage KeyRew: keys=%v", st2.Keys)
 	}
 }

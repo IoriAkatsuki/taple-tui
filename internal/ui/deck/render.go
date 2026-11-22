@@ -519,7 +519,32 @@ func boxBlur(src, dst []float64, w, h, r, dx, dy int) {
 	}
 }
 
-var workers = min(runtime.GOMAXPROCS(0), 4)
+type parallelTask struct {
+	lo, hi int
+	fn     func(lo, hi int)
+	done   *sync.WaitGroup
+}
+
+var (
+	workers = min(runtime.GOMAXPROCS(0), 4)
+	taskCh  = startWorkers()
+)
+
+func startWorkers() chan parallelTask {
+	if workers <= 1 {
+		return nil
+	}
+	ch := make(chan parallelTask, workers*4)
+	for range workers {
+		go func() {
+			for t := range ch {
+				t.fn(t.lo, t.hi)
+				t.done.Done()
+			}
+		}()
+	}
+	return ch
+}
 
 // parallel splits 0..n into bands and runs f on them concurrently.
 func parallel(n int, f func(lo, hi int)) {
@@ -529,12 +554,18 @@ func parallel(n int, f func(lo, hi int)) {
 	}
 	var wg sync.WaitGroup
 	step := (n + workers - 1) / workers
-	for lo := 0; lo < n; lo += step {
+	lastLo := 0
+	for lo := 0; lo+step < n; lo += step {
 		wg.Add(1)
-		go func(lo, hi int) {
-			defer wg.Done()
-			f(lo, hi)
-		}(lo, min(lo+step, n))
+		task := parallelTask{lo: lo, hi: lo + step, fn: f, done: &wg}
+		select {
+		case taskCh <- task:
+		default:
+			wg.Done()
+			f(task.lo, task.hi)
+		}
+		lastLo = lo + step
 	}
+	f(lastLo, n)
 	wg.Wait()
 }

@@ -2,6 +2,7 @@ package deck
 
 import (
 	"hash/fnv"
+	"image"
 	"image/color"
 	"math"
 )
@@ -16,11 +17,11 @@ type VinylLabel struct {
 // VinylLabels are the 5 deterministic retro center-label palettes for albums.
 // Choosing one from an album ID never consumes cassette session RNG.
 var VinylLabels = [5]VinylLabel{
-	{"CRIMSON", color.RGBA{214, 38, 92, 255}, color.RGBA{36, 12, 28, 255}, color.RGBA{255, 196, 84, 255}, color.RGBA{12, 16, 24, 255}},
-	{"CYANIDE", color.RGBA{0, 198, 230, 255}, color.RGBA{14, 34, 48, 255}, color.RGBA{255, 43, 214, 255}, color.RGBA{12, 16, 24, 255}},
-	{"AMBER", color.RGBA{245, 158, 11, 255}, color.RGBA{42, 24, 8, 255}, color.RGBA{254, 240, 138, 255}, color.RGBA{12, 16, 24, 255}},
-	{"VIOLET", color.RGBA{156, 56, 242, 255}, color.RGBA{26, 12, 46, 255}, color.RGBA{0, 229, 255, 255}, color.RGBA{12, 16, 24, 255}},
-	{"EMERALD", color.RGBA{16, 185, 129, 255}, color.RGBA{10, 36, 28, 255}, color.RGBA{236, 253, 245, 255}, color.RGBA{12, 16, 24, 255}},
+	{"BLUE NOTE", color.RGBA{38, 92, 168, 255}, color.RGBA{18, 24, 44, 255}, color.RGBA{245, 185, 66, 255}, color.RGBA{14, 15, 24, 255}},
+	{"VERMILION", color.RGBA{222, 68, 56, 255}, color.RGBA{34, 16, 20, 255}, color.RGBA{248, 220, 148, 255}, color.RGBA{14, 15, 24, 255}},
+	{"AMBER WAX", color.RGBA{235, 156, 46, 255}, color.RGBA{42, 26, 12, 255}, color.RGBA{252, 238, 196, 255}, color.RGBA{14, 15, 24, 255}},
+	{"PACIFIC", color.RGBA{46, 206, 188, 255}, color.RGBA{16, 34, 42, 255}, color.RGBA{255, 107, 74, 255}, color.RGBA{14, 15, 24, 255}},
+	{"JADE", color.RGBA{34, 158, 122, 255}, color.RGBA{14, 34, 28, 255}, color.RGBA{240, 226, 188, 255}, color.RGBA{14, 15, 24, 255}},
 }
 
 // VinylStyleForID deterministically maps an album ID to 1..len(VinylLabels).
@@ -83,6 +84,10 @@ func (r *VinylRenderer) RenderVinyl(v View, pal Palette, pose Pose, st VinylStat
 	}
 	cam := newCamera(v)
 	rot, scale := rotation(pose.Yaw, pose.Pitch, pose.Roll), scaleOf(pose)
+	bounds := vinylBounds(v, cam, pose, rot, scale)
+	if bounds.Empty() {
+		return &r.frame
+	}
 	o := rot.applyT(vec3{pose.X, pose.Y, camDist}.mul(-1)).mul(1 / scale)
 	lbl := VinylLabels[0]
 	if st.Style >= 1 && int(st.Style) <= len(VinylLabels) {
@@ -98,10 +103,10 @@ func (r *VinylRenderer) RenderVinyl(v View, pal Palette, pose Pose, st VinylStat
 		hero:    rgbOf(pal.Hero),
 	}
 	gc, gr := v.Tier.Grid()
-	parallel(h, func(start, end int) {
+	parallel(bounds.Dy(), func(start, end int) {
 		var pixels [8]rgb
-		for y := start; y < end; y++ {
-			for x := range w {
+		for y := bounds.Min.Y + start; y < bounds.Min.Y+end; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				covered := false
 				for q := range gc * gr {
 					fx := float64(x) + (float64(q%gc)+.5)/float64(gc)
@@ -118,6 +123,30 @@ func (r *VinylRenderer) RenderVinyl(v View, pal Palette, pose Pose, st VinylStat
 		}
 	})
 	return &r.frame
+}
+
+func vinylBounds(v View, cam camera, pose Pose, rot mat3, scale float64) image.Rectangle {
+	loX, loY, hiX, hiY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	translation := vec3{pose.X, pose.Y, camDist}
+	for i := range 8 {
+		q := vec3{-vinylRadius, -vinylRadius, -vinylThick / 2}
+		if i&1 != 0 {
+			q.x = vinylRadius
+		}
+		if i&2 != 0 {
+			q.y = vinylRadius
+		}
+		if i&4 != 0 {
+			q.z = vinylThick / 2
+		}
+		x, y := cam.project(rot.apply(q).mul(scale).add(translation))
+		loX, hiX = min(loX, x), max(hiX, x)
+		loY, hiY = min(loY, y/cam.aspect), max(hiY, y/cam.aspect)
+	}
+	if math.IsInf(loX, 1) {
+		return image.Rectangle{}
+	}
+	return image.Rect(max(0, int(math.Floor(loX))-1), max(0, int(math.Floor(loY))-1), min(v.W, int(math.Ceil(hiX))+1), min(v.H, int(math.Ceil(hiY))+1)).Intersect(image.Rect(0, 0, v.W, v.H))
 }
 
 type vinylScene struct {

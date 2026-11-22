@@ -23,6 +23,7 @@ type Browser struct {
 	close               sync.Once
 	sessionOnce         sync.Once
 	sessionGate         chan struct{}
+	targetMu            sync.Mutex
 	target              string
 	session             string
 	lifecycle           sync.RWMutex
@@ -30,24 +31,114 @@ type Browser struct {
 	binary, profile     string
 	profileInfo         os.FileInfo
 	background, stopped bool
+	launchDone          chan struct{}
+	launchCancel        context.CancelFunc
+	launchErr           error
+	queueMu             sync.Mutex
+	lastQueueRev        int64
+	lastQueue           []Track
+	lastQueueTarget     string
+	lastQueueStorefront string
+	lastQueueAuth       bool
 }
 
-func Open(ctx context.Context, profile string) (*Browser, error) {
+func preflight(profile string) (string, string, os.FileInfo, error) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
-		return nil, errors.New("apple-music 支持 Linux，Windows/macOS 为实验性支持")
+		return "", "", nil, errors.New("apple-music 支持 Linux，Windows/macOS 为实验性支持")
 	}
 	binary, err := findChrome()
 	if err != nil {
-		return nil, err
+		return "", "", nil, err
 	}
 	if profile == "" {
 		dir, err := os.UserConfigDir()
 		if err != nil {
-			return nil, err
+			return "", "", nil, err
 		}
 		profile = filepath.Join(dir, "tapefox", "apple-music", "chrome")
 	}
+	info, err := prepareProfile(profile)
+	if err != nil {
+		return "", "", nil, err
+	}
+	return binary, profile, info, nil
+}
+
+func Open(ctx context.Context, profile string) (*Browser, error) {
+	binary, profile, _, err := preflight(profile)
+	if err != nil {
+		return nil, err
+	}
 	return launchBrowser(ctx, binary, profile, true)
+}
+
+// OpenAsync validates the environment and profile root synchronously, then
+// launches the headless browser session in the background so the TUI renders immediately.
+func OpenAsync(ctx context.Context, profile string) (*Browser, error) {
+	binary, profile, info, err := preflight(profile)
+	if err != nil {
+		return nil, err
+	}
+	launchCtx, launchCancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	b := &Browser{
+		ctx:          ctx,
+		binary:       binary,
+		profile:      profile,
+		profileInfo:  info,
+		background:   true,
+		launchDone:   done,
+		launchCancel: launchCancel,
+	}
+	go func() {
+		defer close(done)
+		next, err := launchBrowser(launchCtx, binary, profile, true)
+		b.lifecycle.Lock()
+		defer b.lifecycle.Unlock()
+		if b.stopped {
+			if err == nil && next != nil {
+				next.stopProcess()
+			}
+			b.launchErr = errors.New("播放器已关闭")
+			return
+		}
+		if err != nil {
+			b.launchErr = err
+			return
+		}
+		b.pipe, b.cmd, b.exited = next.pipe, next.cmd, next.exited
+		b.profileInfo = next.profileInfo
+		b.background = true
+	}()
+	return b, nil
+}
+
+func (b *Browser) waitReady(ctx context.Context) error {
+	if b.launchDone == nil {
+		return nil
+	}
+	select {
+	case <-b.launchDone:
+		return b.launchErr
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (b *Browser) currentTarget() string {
+	b.targetMu.Lock()
+	defer b.targetMu.Unlock()
+	return b.target
+}
+
+func (b *Browser) invalidateQueue() {
+	b.queueMu.Lock()
+	b.lastQueueRev = 0
+	b.lastQueue = nil
+	b.lastQueueTarget = ""
+	b.lastQueueStorefront = ""
+	b.lastQueueAuth = false
+	b.queueMu.Unlock()
 }
 
 func launchBrowser(ctx context.Context, binary, profile string, background bool) (*Browser, error) {
@@ -87,13 +178,22 @@ func launchBrowser(ctx context.Context, binary, profile string, background bool)
 func (b *Browser) Close() {
 	b.close.Do(func() {
 		b.lifecycle.Lock()
-		defer b.lifecycle.Unlock()
 		b.stopped = true
+		if b.launchCancel != nil {
+			b.launchCancel()
+		}
 		b.stopProcess()
+		b.lifecycle.Unlock()
+		if b.launchDone != nil {
+			<-b.launchDone
+		}
 	})
 }
 
 func (b *Browser) stopProcess() {
+	if b.pipe == nil || b.cmd == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = b.pipe.call(ctx, "", "Browser.close", nil, nil)
@@ -122,7 +222,10 @@ func (b *Browser) startLocked(background bool) error {
 		return err
 	}
 	b.pipe, b.cmd, b.exited = next.pipe, next.cmd, next.exited
+	b.targetMu.Lock()
 	b.target, b.session = "", ""
+	b.targetMu.Unlock()
+	b.invalidateQueue()
 	b.profileInfo = next.profileInfo
 	b.background, b.stopped = background, false
 	return nil
@@ -136,6 +239,9 @@ func appleOrigin(raw string) bool {
 // sessionForPage rechecks the target URL before every evaluation; login popups
 // and other tabs are never evaluated, even when they belong to this process.
 func (b *Browser) sessionForPage(ctx context.Context) (string, error) {
+	if b.pipe == nil {
+		return "", errors.New("后台 Apple Music 页面正在加载或已关闭；请稍候，必要时重新启动播放器")
+	}
 	// Keep session discovery serial without extending a caller's deadline.
 	b.sessionOnce.Do(func() { b.sessionGate = make(chan struct{}, 1) })
 	select {
@@ -153,19 +259,24 @@ func (b *Browser) sessionForPage(ctx context.Context) (string, error) {
 	if err := b.pipe.call(ctx, "", "Target.getTargets", nil, &targets); err != nil {
 		return "", err
 	}
+	b.targetMu.Lock()
+	curTarget, curSession := b.target, b.session
+	b.targetMu.Unlock()
 	for _, t := range targets.TargetInfos {
-		if t.Type != "page" || !appleOrigin(t.URL) || (b.target != "" && t.TargetID != b.target) {
+		if t.Type != "page" || !appleOrigin(t.URL) || (curTarget != "" && t.TargetID != curTarget) {
 			continue
 		}
-		if t.TargetID == b.target && b.session != "" {
-			return b.session, nil
+		if t.TargetID == curTarget && curSession != "" {
+			return curSession, nil
 		}
 		var attached struct{ SessionID string }
 		if err := b.pipe.call(ctx, "", "Target.attachToTarget", map[string]any{"targetId": t.TargetID, "flatten": true}, &attached); err != nil {
 			return "", err
 		}
+		b.targetMu.Lock()
 		b.target, b.session = t.TargetID, attached.SessionID
-		return b.session, nil
+		b.targetMu.Unlock()
+		return attached.SessionID, nil
 	}
 	return "", errors.New("后台 Apple Music 页面正在加载或已关闭；请稍候，必要时重新启动播放器")
 }
@@ -228,6 +339,9 @@ func (b *Browser) evaluate(ctx context.Context, request any, dest any) error {
 func (b *Browser) Show(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if err := b.waitReady(ctx); err != nil {
+		return err
+	}
 	b.lifecycle.Lock()
 	defer b.lifecycle.Unlock()
 	if b.stopped {
@@ -251,7 +365,7 @@ func (b *Browser) Show(ctx context.Context) error {
 		return err
 	}
 	var window struct{ WindowID int }
-	if b.pipe.call(ctx, "", "Browser.getWindowForTarget", map[string]string{"targetId": b.target}, &window) == nil {
+	if b.pipe.call(ctx, "", "Browser.getWindowForTarget", map[string]string{"targetId": b.currentTarget()}, &window) == nil {
 		_ = b.pipe.call(ctx, "", "Browser.setWindowBounds", map[string]any{"windowId": window.WindowID, "bounds": map[string]string{"windowState": "normal"}}, nil)
 	}
 	return b.pipe.call(ctx, session, "Page.bringToFront", nil, nil)

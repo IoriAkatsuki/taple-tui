@@ -3,6 +3,7 @@ package ui
 import (
 	"image/color"
 	"math"
+	"strings"
 	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
@@ -35,18 +36,22 @@ func (c *CounterState) Update(now time.Time, d time.Duration) {
 
 // Drawing never advances state, so snapshots cannot consume an ignition frame.
 func DrawNixieCounter(s *npScreen, x, y int, d time.Duration, ready bool, now time.Time, state *CounterState) {
-	p := newNPPixels(npCounterWidth, npCounterRows*2)
+	var px [npCounterRows * 2][npCounterWidth]color.RGBA
 	pal := s.pal
-	glow := npLerp(pal.Bg, pal.Accent2, .12)
-	for i := range p.px {
-		p.px[i] = glow
+	glow := npLerpRGBA(pal.Bg, pal.Accent2, .12)
+	for row := range px {
+		for col := range px[row] {
+			px[row][col] = glow
+		}
 	}
 	digits := counterDigits(d)
-	pulse := color.Color(pal.Accent2)
+	pulse := pal.Accent2
 	if !ready {
 		phase := float64(now.UnixNano()%int64(500*time.Millisecond)) / float64(500*time.Millisecond)
-		pulse = npLerp(pal.Ghost, pal.Accent2, .5+.5*math.Cos(2*math.Pi*phase))
+		pulse = npLerpRGBA(pal.Ghost, pal.Accent2, .5+.5*math.Cos(2*math.Pi*phase))
 	}
+	ghostFade := npLerpRGBA(pal.Ghost, pal.Accent2, .45)
+	ignite := npLerpRGBA(pal.Accent2, pal.Text, .55)
 	for i, dx := range [4]int{0, 5, 12, 17} {
 		bits, oldBits := npDigitSegments[digits[i]], uint8(0)
 		lit := pulse
@@ -55,29 +60,38 @@ func DrawNixieCounter(s *npScreen, x, y int, d time.Duration, ready bool, now ti
 		} else if state != nil && state.initialized && state.digits[i] == digits[i] && !state.changedAt[i].IsZero() {
 			elapsed := now.Sub(state.changedAt[i])
 			if elapsed >= 0 && elapsed < 33*time.Millisecond {
-				lit = npLerp(pal.Accent2, pal.Text, .55)
+				lit = ignite
 			}
 			if elapsed >= 0 && elapsed < 66*time.Millisecond {
 				oldBits = npDigitSegments[state.prevDigits[i]] &^ bits
 			}
 		}
 		// Paint in passes: shared segment endpoints must keep the brighter pixel.
-		for _, layer := range []struct {
+		for _, layer := range [3]struct {
 			bits uint8
-			fg   color.Color
-		}{{0x7f, pal.Ghost}, {oldBits, npLerp(pal.Ghost, pal.Accent2, .45)}, {bits, lit}} {
+			fg   color.RGBA
+		}{{0x7f, pal.Ghost}, {oldBits, ghostFade}, {bits, lit}} {
 			for seg, pixels := range npSegmentPixels {
 				if layer.bits&(1<<seg) != 0 {
 					for _, xy := range pixels {
-						p.set(dx+xy[0], xy[1], layer.fg)
+						px[xy[1]][dx+xy[0]] = layer.fg
 					}
 				}
 			}
 		}
 	}
-	p.set(10, 2, pulse)
-	p.set(10, 4, pulse)
-	s.blit(p, x, y)
+	px[2][10] = pulse
+	px[4][10] = pulse
+	for cy := range npCounterRows {
+		for cx := range npCounterWidth {
+			top, bot := px[cy*2][cx], px[cy*2+1][cx]
+			if top == bot {
+				s.setRGBA(x+cx, y+cy, "█", 1, top, color.RGBA{}, true, false, false)
+			} else {
+				s.setRGBA(x+cx, y+cy, "▀", 1, top, bot, true, true, false)
+			}
+		}
+	}
 }
 
 func meterLevel(v float64) float64 {
@@ -88,10 +102,18 @@ func meterLevel(v float64) float64 {
 }
 
 func drawLEDMeter(s *npScreen, x, y, w int, label string, frame applemusic.MeterFrame) {
+	drawLEDMeterPeaks(s, x, y, w, label, frame, [2]float64{})
+}
+
+func drawLEDMeterPeaks(s *npScreen, x, y, w int, label string, frame applemusic.MeterFrame, peaks [2]float64) {
 	if w <= 0 {
 		return
 	}
-	s.text(x, y, label+"  dBFS", uv.Style{Fg: s.pal.Secondary}, w)
+	title := label
+	if !strings.Contains(title, "dBFS") {
+		title += "  dBFS"
+	}
+	s.text(x, y, title, uv.Style{Fg: s.pal.Secondary}, w)
 	n := max(0, min((w-2)/2, 16))
 	if n >= 8 {
 		for _, tick := range []struct {
@@ -101,14 +123,33 @@ func drawLEDMeter(s *npScreen, x, y, w int, label string, frame applemusic.Meter
 			s.text(x+2+tick.offset, y+1, tick.label, uv.Style{Fg: s.pal.Secondary}, w-2-tick.offset)
 		}
 	}
+	unlit := npLerpRGBA(s.pal.Rule, s.pal.Bg, .6)
 	for ch := range 2 {
 		s.text(x, y+ch+2, []string{"L", "R"}[ch], uv.Style{Fg: s.pal.Secondary}, 1)
+		lvl := meterLevel(frame.Levels[ch])
+		scaled := lvl * float64(n)
+		activeCols := int(math.Floor(scaled))
+		frac := scaled - float64(activeCols)
+		peakIdx := int(math.Floor(meterLevel(peaks[ch])*float64(n) - 1e-6))
 		for i := range n {
-			fg := npLerp(s.pal.Rule, s.pal.Bg, .6)
-			if frame.Ready && float64(i+1) <= meterLevel(frame.Levels[ch])*float64(n) {
-				fg = meterColor(s.pal, -48+48*float64(i+1)/float64(n))
+			col := unlit
+			glyph := "█"
+			db := -48 + 48*float64(i+1)/float64(max(1, n))
+			switch {
+			case frame.Ready && i < activeCols:
+				col, _ = npRGBA(meterColor(s.pal, db))
+			case frame.Ready && i == activeCols && frac >= 0.25:
+				col, _ = npRGBA(meterColor(s.pal, db))
+				if frac >= 0.75 {
+					glyph = "▊"
+				} else {
+					glyph = "▌"
+				}
+			case frame.Ready && peaks[ch] > lvl && i == peakIdx && peakIdx >= activeCols:
+				col, _ = npRGBA(meterColor(s.pal, db))
+				glyph = "▐"
 			}
-			s.set(x+2+i*2, y+ch+2, "█", 1, uv.Style{Fg: fg})
+			s.setRGBA(x+2+i*2, y+ch+2, glyph, 1, col, color.RGBA{}, true, false, false)
 		}
 	}
 }
@@ -195,22 +236,32 @@ func DrawBezel(s *npScreen, x, y, w, h int, label string, style BezelStyle) {
 }
 
 func drawGlitch(s *npScreen, x, y, w, h, phase int) {
+	if w <= 0 {
+		return
+	}
+	if cap(s.glitchBuf) >= w {
+		s.glitchBuf = s.glitchBuf[:w]
+	} else {
+		s.glitchBuf = make([]npCell, w)
+	}
+	cells := s.glitchBuf
 	for row := 2 + phase; row < h; row += 5 {
-		cells := make([]uv.Cell, w)
 		for col := range w {
-			if c := s.buf.CellAt(x+col, y+row); c != nil {
-				cells[col] = *c
+			if c, ok := s.cellAt(x+col, y+row); ok {
+				cells[col] = c
+			} else {
+				cells[col] = npCell{}
 			}
 		}
 		shift := 0
 		if phase == 0 && row%2 != 0 {
 			shift = 2
 		}
-		s.fill(x, y+row, w, 1, s.pal.Bg)
+		s.fillRGBA(x, y+row, w, 1, s.pal.Bg)
 		// Separated color ghosts precede the displaced scanline itself.
-		for _, offset := range []int{-1, 1, 0} {
+		for _, offset := range [3]int{-1, 1, 0} {
 			for col, c := range cells {
-				if c.Width != 1 || c.Content == "" || (c.Content == " " && (c.Style.Bg == nil || npSameColor(c.Style.Bg, s.pal.Bg))) {
+				if c.Width != 1 || c.Content == "" || (c.Content == " " && (!c.HasBg || npSameRGBA(c.Bg, s.pal.Bg))) {
 					continue
 				}
 				dest := col + shift + offset
@@ -222,12 +273,13 @@ func drawGlitch(s *npScreen, x, y, w, h, phase int) {
 					if offset > 0 {
 						fg = s.pal.Hero
 					}
-					c.Style.Fg = fg
-					if c.Style.Bg != nil {
-						c.Style.Bg = npLerp(c.Style.Bg, fg, .25)
+					c.Fg = fg
+					c.HasFg = true
+					if c.HasBg {
+						c.Bg = npLerpRGBA(c.Bg, fg, .25)
 					}
 				}
-				s.set(x+dest, y+row, c.Content, 1, c.Style)
+				s.setCell(x+dest, y+row, c)
 			}
 		}
 	}

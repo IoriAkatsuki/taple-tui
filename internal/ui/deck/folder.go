@@ -2,6 +2,7 @@ package deck
 
 import (
 	"hash/fnv"
+	"image"
 	"image/color"
 	"math"
 )
@@ -16,10 +17,10 @@ type FolderPalette struct {
 // FolderPalettes are the 4 deterministic retro filing-folder palettes for container items.
 // Selecting one from a container ID never consumes session cassette RNG.
 var FolderPalettes = [4]FolderPalette{
-	{"MANILA", color.RGBA{204, 166, 102, 255}, color.RGBA{232, 194, 126, 255}, color.RGBA{245, 240, 226, 255}, color.RGBA{245, 192, 68, 255}},
-	{"SLATE", color.RGBA{58, 88, 116, 255}, color.RGBA{82, 120, 154, 255}, color.RGBA{230, 238, 248, 255}, color.RGBA{0, 229, 255, 255}},
-	{"KRAFT", color.RGBA{152, 102, 60, 255}, color.RGBA{182, 126, 76, 255}, color.RGBA{240, 230, 214, 255}, color.RGBA{255, 176, 0, 255}},
-	{"REVACHOL", color.RGBA{128, 52, 46, 255}, color.RGBA{164, 72, 62, 255}, color.RGBA{244, 232, 222, 255}, color.RGBA{255, 196, 84, 255}},
+	{"MANILA", color.RGBA{210, 174, 114, 255}, color.RGBA{236, 202, 140, 255}, color.RGBA{246, 238, 224, 255}, color.RGBA{245, 185, 66, 255}},
+	{"PACIFIC", color.RGBA{46, 86, 108, 255}, color.RGBA{68, 116, 140, 255}, color.RGBA{236, 240, 244, 255}, color.RGBA{46, 216, 198, 255}},
+	{"WALNUT", color.RGBA{142, 92, 56, 255}, color.RGBA{176, 118, 74, 255}, color.RGBA{242, 232, 216, 255}, color.RGBA{245, 185, 66, 255}},
+	{"CRIMSON", color.RGBA{136, 54, 48, 255}, color.RGBA{174, 76, 66, 255}, color.RGBA{246, 232, 220, 255}, color.RGBA{255, 188, 92, 255}},
 }
 
 // FolderStyleForID deterministically maps a container ID to 1..len(FolderPalettes).
@@ -83,8 +84,18 @@ func (r *FolderRenderer) RenderFolder(v View, pose Pose, st FolderState) *Frame 
 		return &r.frame
 	}
 	sc := newFolderScene(v, pose, st)
-	r.traceFolder(v, &sc)
+	r.traceFolder(v, pose, &sc)
 	return &r.frame
+}
+
+// FolderProjectedBounds returns the projected screen-cell rectangle of the
+// folder without ray-casting.
+func FolderProjectedBounds(v View, pose Pose, st FolderState) image.Rectangle {
+	if v.Aspect <= 0 {
+		v.Aspect = 2
+	}
+	sc := newFolderScene(v, pose, st)
+	return sc.bounds(v, pose)
 }
 
 type folderScene struct {
@@ -122,13 +133,45 @@ func newFolderScene(v View, pose Pose, st FolderState) folderScene {
 	}
 }
 
-func (r *FolderRenderer) traceFolder(v View, sc *folderScene) {
-	w, h := v.W, v.H
+func (sc *folderScene) bounds(v View, pose Pose) image.Rectangle {
+	loX, loY, hiX, hiY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	translation := vec3{pose.X, pose.Y, camDist}
+	addBox := func(lo, hi vec3, rot mat3) {
+		for i := range 8 {
+			q := lo
+			if i&1 != 0 {
+				q.x = hi.x
+			}
+			if i&2 != 0 {
+				q.y = hi.y
+			}
+			if i&4 != 0 {
+				q.z = hi.z
+			}
+			x, y := sc.cam.project(rot.apply(q).mul(sc.scale).add(translation))
+			loX, hiX = min(loX, x), max(hiX, x)
+			loY, hiY = min(loY, y/sc.cam.aspect), max(hiY, y/sc.cam.aspect)
+		}
+	}
+	addBox(vec3{-folderHalfW, folderTabTopY, -0.9}, vec3{folderHalfW, folderHalfH, 2.3}, sc.rot)
+	addBox(vec3{-folderHalfW, -folderHalfH + 3.6, -2.5}, vec3{folderHalfW, folderHalfH, -1.0}, sc.rot.mul(sc.flapRot))
+	if math.IsInf(loX, 1) {
+		return image.Rectangle{}
+	}
+	return image.Rect(max(0, int(math.Floor(loX))-1), max(0, int(math.Floor(loY))-1), min(v.W, int(math.Ceil(hiX))+1), min(v.H, int(math.Ceil(hiY))+1)).Intersect(image.Rect(0, 0, v.W, v.H))
+}
+
+func (r *FolderRenderer) traceFolder(v View, pose Pose, sc *folderScene) {
+	bounds := sc.bounds(v, pose)
+	if bounds.Empty() {
+		return
+	}
+	w := v.W
 	gc, gr := v.Tier.Grid()
-	parallel(h, func(start, end int) {
+	parallel(bounds.Dy(), func(start, end int) {
 		var pixels [8]rgb
-		for y := start; y < end; y++ {
-			for x := range w {
+		for y := bounds.Min.Y + start; y < bounds.Min.Y+end; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				covered := false
 				for q := range gc * gr {
 					fx := float64(x) + (float64(q%gc)+.5)/float64(gc)

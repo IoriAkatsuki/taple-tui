@@ -13,6 +13,14 @@ import (
 	"github.com/go-musicfox/go-musicfox/internal/ui/deck"
 )
 
+var npASCII [128]string
+
+func init() {
+	for i := range npASCII {
+		npASCII[i] = string(byte(i))
+	}
+}
+
 // npPalette holds the color roles of the framebuffer. Text is near
 // neutral; Accent marks what is happening now and Accent2 switches that are on.
 // Ghost, for unlit segments and lamps, is derived from Bg and Rule.
@@ -20,48 +28,399 @@ type npPalette struct {
 	Bg, Surface, Text, Hero, Secondary, Rule, Ghost, Accent, Accent2 color.RGBA
 }
 
-// npScreen is the page framebuffer. Cells left without a background get the
-// page background at the end, so widgets only set backgrounds they own.
-type npScreen struct {
-	buf  *uv.Buffer
-	w, h int
-	pal  npPalette
+type npCell struct {
+	Content string
+	Width   int
+	Fg      color.RGBA
+	Bg      color.RGBA
+	HasFg   bool
+	HasBg   bool
+	Bold    bool
 }
 
-func (s *npScreen) reset(w, h int) {
-	if s.buf == nil {
-		s.buf = uv.NewBuffer(w, h)
+var npEmptyCell = npCell{Content: " ", Width: 1}
+
+// npBuffer stores a flat grid of cells and serializes frames to SGR bytes
+// without per-cell color interface boxing.
+type npBuffer struct {
+	w, h  int
+	cells []npCell
+	out   []byte
+}
+
+func (b *npBuffer) reset(w, h int) {
+	w, h = max(w, 0), max(h, 0)
+	need := w * h
+	if cap(b.cells) >= need {
+		b.cells = b.cells[:need]
 	} else {
-		s.buf.Resize(w, h)
+		b.cells = make([]npCell, need)
 	}
-	s.w, s.h = w, h
-	s.buf.Clear()
+	b.w, b.h = w, h
+	b.Clear()
 }
 
-// render serializes the frame: exactly h lines, no trailing newline.
-func (s *npScreen) render() string {
-	return s.buf.Render()
+func (b *npBuffer) Clear() {
+	for i := range b.cells {
+		b.cells[i] = npEmptyCell
+	}
 }
 
-func (s *npScreen) set(x, y int, content string, width int, st uv.Style) {
-	if x < 0 || y < 0 || y >= s.h || x+width > s.w {
+// CellAt returns an ultraviolet view of the cell for tests and debug callers.
+func (b *npBuffer) CellAt(x, y int) *uv.Cell {
+	if b == nil || x < 0 || y < 0 || x >= b.w || y >= b.h {
+		return nil
+	}
+	c := &b.cells[y*b.w+x]
+	var st uv.Style
+	if c.HasFg {
+		st.Fg = c.Fg
+	}
+	if c.HasBg {
+		st.Bg = c.Bg
+	}
+	if c.Bold {
+		st.Attrs = uv.AttrBold
+	}
+	return &uv.Cell{
+		Content: c.Content,
+		Width:   c.Width,
+		Style:   st,
+	}
+}
+
+func clearWideOverlap(row []npCell, x int) {
+	if x < 0 || x >= len(row) {
 		return
 	}
-	s.buf.SetCell(x, y, &uv.Cell{Content: content, Width: width, Style: st})
-}
-
-func (s *npScreen) fill(x, y, w, h int, bg color.Color) {
-	for yy := y; yy < y+h; yy++ {
-		for xx := x; xx < x+w; xx++ {
-			s.set(xx, yy, " ", 1, uv.Style{Bg: bg})
+	prev := row[x]
+	if pw := prev.Width; pw > 1 {
+		for j := 0; j < pw && x+j < len(row); j++ {
+			blank := prev
+			blank.Content = " "
+			blank.Width = 1
+			row[x+j] = blank
+		}
+		return
+	}
+	if prev.Width == 0 {
+		for j := 1; x-j >= 0; j++ {
+			wide := row[x-j]
+			if wide.Width > 1 && j < wide.Width {
+				for k := 0; k < wide.Width && x-j+k < len(row); k++ {
+					blank := wide
+					blank.Content = " "
+					blank.Width = 1
+					row[x-j+k] = blank
+				}
+				return
+			}
+			if wide.Width > 0 {
+				return
+			}
 		}
 	}
 }
 
-func (s *npScreen) repeat(x, y, n int, ch string, st uv.Style) {
-	for i := range max(n, 0) {
-		s.set(x+i, y, ch, 1, st)
+func (b *npBuffer) setCell(x, y int, c npCell) {
+	if b == nil || x < 0 || y < 0 || x >= b.w || y >= b.h {
+		return
 	}
+	row := b.cells[y*b.w : (y+1)*b.w]
+	span := max(c.Width, 1)
+	for pos := x; pos < x+span && pos < b.w; pos++ {
+		clearWideOverlap(row, pos)
+	}
+	cw := c.Width
+	if cw > 1 && x+cw > b.w {
+		blank := c
+		blank.Content = " "
+		blank.Width = 1
+		for i := x; i < b.w; i++ {
+			row[i] = blank
+		}
+		return
+	}
+	row[x] = c
+	if cw > 1 {
+		for j := 1; j < cw && x+j < b.w; j++ {
+			row[x+j] = npCell{}
+		}
+	}
+}
+
+func appendUint8(b []byte, v uint8) []byte {
+	if v >= 100 {
+		b = append(b, '0'+v/100)
+		v %= 100
+		return append(b, '0'+v/10, '0'+v%10)
+	}
+	if v >= 10 {
+		return append(b, '0'+v/10, '0'+v%10)
+	}
+	return append(b, '0'+v)
+}
+
+func (b *npBuffer) render() string {
+	if b == nil || b.w <= 0 || b.h <= 0 {
+		return ""
+	}
+	b.out = b.out[:0]
+	type penState struct {
+		fg, bg color.RGBA
+		hasFg  bool
+		hasBg  bool
+		bold   bool
+	}
+	for y := 0; y < b.h; y++ {
+		if y > 0 {
+			b.out = append(b.out, '\n')
+		}
+		var pen penState
+		pendingSpaces := 0
+		row := b.cells[y*b.w : (y+1)*b.w]
+		for x := 0; x < len(row); x++ {
+			c := row[x]
+			if c.Width == 0 && c.Content == "" {
+				continue
+			}
+			if c.Content == " " && c.Width == 1 && !c.HasFg && !c.HasBg && !c.Bold {
+				if pen.hasFg || pen.hasBg || pen.bold {
+					b.out = append(b.out, "\x1b[m"...)
+					pen = penState{}
+				}
+				pendingSpaces++
+				continue
+			}
+			if pendingSpaces > 0 {
+				for range pendingSpaces {
+					b.out = append(b.out, ' ')
+				}
+				pendingSpaces = 0
+			}
+			if !c.HasFg && !c.HasBg && !c.Bold {
+				if pen.hasFg || pen.hasBg || pen.bold {
+					b.out = append(b.out, "\x1b[m"...)
+					pen = penState{}
+				}
+			} else if c.HasFg != pen.hasFg || c.HasBg != pen.hasBg || c.Bold != pen.bold ||
+				(c.HasFg && c.Fg != pen.fg) || (c.HasBg && c.Bg != pen.bg) {
+				b.out = append(b.out, "\x1b["...)
+				sep := false
+				if pen.bold && !c.Bold {
+					b.out = append(b.out, "22"...)
+					sep = true
+				}
+				if pen.hasFg && !c.HasFg {
+					if sep {
+						b.out = append(b.out, ';')
+					}
+					b.out = append(b.out, "39"...)
+					sep = true
+				}
+				if pen.hasBg && !c.HasBg {
+					if sep {
+						b.out = append(b.out, ';')
+					}
+					b.out = append(b.out, "49"...)
+					sep = true
+				}
+				if c.HasFg && (!pen.hasFg || c.Fg != pen.fg) {
+					if sep {
+						b.out = append(b.out, ';')
+					}
+					b.out = append(b.out, "38;2;"...)
+					b.out = appendUint8(b.out, c.Fg.R)
+					b.out = append(b.out, ';')
+					b.out = appendUint8(b.out, c.Fg.G)
+					b.out = append(b.out, ';')
+					b.out = appendUint8(b.out, c.Fg.B)
+					sep = true
+				}
+				if c.HasBg && (!pen.hasBg || c.Bg != pen.bg) {
+					if sep {
+						b.out = append(b.out, ';')
+					}
+					b.out = append(b.out, "48;2;"...)
+					b.out = appendUint8(b.out, c.Bg.R)
+					b.out = append(b.out, ';')
+					b.out = appendUint8(b.out, c.Bg.G)
+					b.out = append(b.out, ';')
+					b.out = appendUint8(b.out, c.Bg.B)
+					sep = true
+				}
+				if !pen.bold && c.Bold {
+					if sep {
+						b.out = append(b.out, ';')
+					}
+					b.out = append(b.out, '1')
+				}
+				b.out = append(b.out, 'm')
+				pen = penState{fg: c.Fg, bg: c.Bg, hasFg: c.HasFg, hasBg: c.HasBg, bold: c.Bold}
+			}
+			if c.Content == "" {
+				b.out = append(b.out, ' ')
+			} else {
+				b.out = append(b.out, c.Content...)
+			}
+		}
+		if pen.hasFg || pen.hasBg || pen.bold {
+			b.out = append(b.out, "\x1b[m"...)
+		}
+	}
+	return string(b.out)
+}
+
+// npScreen is the page framebuffer. Cells left without a background get the
+// page background at the end, so widgets only set backgrounds they own.
+type npScreen struct {
+	buf       *npBuffer
+	w, h      int
+	pal       npPalette
+	glitchBuf []npCell
+}
+
+func (s *npScreen) reset(w, h int) {
+	if s.buf == nil {
+		s.buf = &npBuffer{}
+	}
+	s.buf.reset(w, h)
+	s.w, s.h = w, h
+}
+
+// render serializes the frame: exactly h lines, no trailing newline.
+func (s *npScreen) render() string {
+	return s.buf.render()
+}
+
+func npRGBA(c color.Color) (color.RGBA, bool) {
+	if c == nil {
+		return color.RGBA{}, false
+	}
+	if rgba, ok := c.(color.RGBA); ok {
+		return rgba, true
+	}
+	if rgba, ok := c.(*color.RGBA); ok {
+		if rgba == nil {
+			return color.RGBA{}, false
+		}
+		return *rgba, true
+	}
+	r, g, b, a := c.RGBA()
+	return color.RGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), uint8(a >> 8)}, true
+}
+
+func (s *npScreen) cellAt(x, y int) (npCell, bool) {
+	if s.buf == nil || x < 0 || y < 0 || x >= s.w || y >= s.h {
+		return npCell{}, false
+	}
+	return s.buf.cells[y*s.w+x], true
+}
+
+func (s *npScreen) setCell(x, y int, c npCell) {
+	if s.buf == nil || x < 0 || y < 0 || y >= s.h || x+c.Width > s.w {
+		return
+	}
+	s.buf.setCell(x, y, c)
+}
+
+func (s *npScreen) setRGBA(x, y int, content string, width int, fg, bg color.RGBA, hasFg, hasBg, bold bool) {
+	if s.buf == nil || x < 0 || y < 0 || y >= s.h || x+width > s.w {
+		return
+	}
+	s.buf.setCell(x, y, npCell{
+		Content: content,
+		Width:   width,
+		Fg:      fg,
+		Bg:      bg,
+		HasFg:   hasFg,
+		HasBg:   hasBg,
+		Bold:    bold,
+	})
+}
+
+func (s *npScreen) set(x, y int, content string, width int, st uv.Style) {
+	if s.buf == nil || x < 0 || y < 0 || y >= s.h || x+width > s.w {
+		return
+	}
+	fg, hasFg := npRGBA(st.Fg)
+	bg, hasBg := npRGBA(st.Bg)
+	s.buf.setCell(x, y, npCell{
+		Content: content,
+		Width:   width,
+		Fg:      fg,
+		Bg:      bg,
+		HasFg:   hasFg,
+		HasBg:   hasBg,
+		Bold:    st.Attrs&uv.AttrBold != 0,
+	})
+}
+
+func (s *npScreen) fillRGBA(x, y, w, h int, bg color.RGBA) {
+	if s.buf == nil || w <= 0 || h <= 0 {
+		return
+	}
+	x0, y0 := max(x, 0), max(y, 0)
+	x1, y1 := min(x+w, s.w), min(y+h, s.h)
+	cell := npCell{Content: " ", Width: 1, Bg: bg, HasBg: true}
+	for yy := y0; yy < y1; yy++ {
+		for xx := x0; xx < x1; xx++ {
+			s.buf.setCell(xx, yy, cell)
+		}
+	}
+}
+
+// tintBg fills cells inside (x, y, w, h) that do not already own a background
+// color, preserving all existing glyphs and foregrounds.
+func (s *npScreen) tintBg(x, y, w, h int, bg color.RGBA) {
+	if s.buf == nil || w <= 0 || h <= 0 {
+		return
+	}
+	x0, y0 := max(x, 0), max(y, 0)
+	x1, y1 := min(x+w, s.w), min(y+h, s.h)
+	for yy := y0; yy < y1; yy++ {
+		row := s.buf.cells[yy*s.w : (yy+1)*s.w]
+		for xx := x0; xx < x1; xx++ {
+			c := &row[xx]
+			if c.Width == 0 && c.Content == "" {
+				continue
+			}
+			if !c.HasBg {
+				c.Bg = bg
+				c.HasBg = true
+			}
+		}
+	}
+}
+
+func (s *npScreen) fill(x, y, w, h int, bg color.Color) {
+	if s.buf == nil || w <= 0 || h <= 0 {
+		return
+	}
+	rgba, ok := npRGBA(bg)
+	if ok {
+		s.fillRGBA(x, y, w, h, rgba)
+		return
+	}
+	x0, y0 := max(x, 0), max(y, 0)
+	x1, y1 := min(x+w, s.w), min(y+h, s.h)
+	for yy := y0; yy < y1; yy++ {
+		for xx := x0; xx < x1; xx++ {
+			s.buf.setCell(xx, yy, npEmptyCell)
+		}
+	}
+}
+
+func (s *npScreen) repeatRGBA(x, y, n int, ch string, fg, bg color.RGBA, hasFg, hasBg, bold bool) {
+	for i := range max(n, 0) {
+		s.setRGBA(x+i, y, ch, 1, fg, bg, hasFg, hasBg, bold)
+	}
+}
+
+func (s *npScreen) repeat(x, y, n int, ch string, st uv.Style) {
+	fg, hasFg := npRGBA(st.Fg)
+	bg, hasBg := npRGBA(st.Bg)
+	s.repeatRGBA(x, y, n, ch, fg, bg, hasFg, hasBg, st.Attrs&uv.AttrBold != 0)
 }
 
 // npNextCluster returns the first grapheme cluster of str, normalized so that
@@ -83,7 +442,38 @@ func npNextCluster(str string) (cluster string, width, size int) {
 	return "?", 1, len(cl)
 }
 
+func npIsPrintableASCII(str string) bool {
+	for i := 0; i < len(str); i++ {
+		b := str[i]
+		if b < 0x20 || b >= 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
 func npSanitize(str string) string {
+	clean := true
+	for i := 0; i < len(str); {
+		b := str[i]
+		if b < 0x80 {
+			if b < 0x20 || b == 0x7f {
+				clean = false
+				break
+			}
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(str[i:])
+		if unicode.IsControl(r) {
+			clean = false
+			break
+		}
+		i += size
+	}
+	if clean {
+		return str
+	}
 	return strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '
@@ -93,6 +483,9 @@ func npSanitize(str string) string {
 }
 
 func npWidth(str string) int {
+	if npIsPrintableASCII(str) {
+		return len(str)
+	}
 	w := 0
 	for len(str) > 0 {
 		_, cw, n := npNextCluster(str)
@@ -102,11 +495,24 @@ func npWidth(str string) int {
 	return w
 }
 
-// text draws str at (x, y) within maxW columns, ending with "…" when cut, and
-// returns the number of columns used.
-func (s *npScreen) text(x, y int, str string, st uv.Style, maxW int) int {
+func (s *npScreen) textRGBA(x, y int, str string, fg, bg color.RGBA, hasFg, hasBg, bold bool, maxW int) int {
 	if maxW <= 0 || str == "" {
 		return 0
+	}
+	if npIsPrintableASCII(str) {
+		limit := len(str)
+		cut := limit > maxW
+		if cut {
+			limit = maxW - 1
+		}
+		for col := 0; col < limit; col++ {
+			s.setRGBA(x+col, y, npASCII[str[col]], 1, fg, bg, hasFg, hasBg, bold)
+		}
+		if cut {
+			s.setRGBA(x+limit, y, "…", 1, fg, bg, hasFg, hasBg, bold)
+			return limit + 1
+		}
+		return limit
 	}
 	str = npSanitize(str)
 	limit, cut := maxW, npWidth(str) > maxW
@@ -123,39 +529,55 @@ func (s *npScreen) text(x, y int, str string, st uv.Style, maxW int) int {
 		if col+w > limit {
 			break
 		}
-		s.set(x+col, y, cl, w, st)
+		s.setRGBA(x+col, y, cl, w, fg, bg, hasFg, hasBg, bold)
 		col += w
 	}
 	if cut {
-		s.set(x+col, y, "…", 1, st)
+		s.setRGBA(x+col, y, "…", 1, fg, bg, hasFg, hasBg, bold)
 		col++
 	}
 	return col
 }
 
+// text draws str at (x, y) within maxW columns, ending with "…" when cut, and
+// returns the number of columns used.
+func (s *npScreen) text(x, y int, str string, st uv.Style, maxW int) int {
+	if maxW <= 0 || str == "" {
+		return 0
+	}
+	fg, hasFg := npRGBA(st.Fg)
+	bg, hasBg := npRGBA(st.Bg)
+	return s.textRGBA(x, y, str, fg, bg, hasFg, hasBg, st.Attrs&uv.AttrBold != 0, maxW)
+}
+
 // npPixels is a pixel canvas drawn with half blocks: every cell holds a top
 // and a bottom pixel, which are roughly square in a terminal font.
 type npPixels struct {
-	w, h int
-	px   []color.Color
+	w, h  int
+	px    []color.RGBA
+	valid []bool
 }
 
 func newNPPixels(w, h int) *npPixels {
 	h += h % 2
-	return &npPixels{w: w, h: h, px: make([]color.Color, w*h)}
+	n := w * h
+	return &npPixels{w: w, h: h, px: make([]color.RGBA, n), valid: make([]bool, n)}
 }
 
-func (p *npPixels) set(x, y int, c color.Color) {
+func (p *npPixels) set(x, y int, c color.RGBA) {
 	if x >= 0 && y >= 0 && x < p.w && y < p.h {
-		p.px[y*p.w+x] = c
+		i := y*p.w + x
+		p.px[i] = c
+		p.valid[i] = true
 	}
 }
 
-func (p *npPixels) at(x, y int) color.Color {
+func (p *npPixels) at(x, y int) (color.RGBA, bool) {
 	if x < 0 || y < 0 || x >= p.w || y >= p.h {
-		return nil
+		return color.RGBA{}, false
 	}
-	return p.px[y*p.w+x]
+	i := y*p.w + x
+	return p.px[i], p.valid[i]
 }
 
 func npSameColor(a, b color.Color) bool {
@@ -167,22 +589,27 @@ func npSameColor(a, b color.Color) bool {
 	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
 }
 
+func npSameRGBA(a, b color.RGBA) bool {
+	return a.R == b.R && a.G == b.G && a.B == b.B
+}
+
 // blit copies the canvas to the screen; transparent pixels keep the screen
 // background.
 func (s *npScreen) blit(p *npPixels, x0, y0 int) {
 	for cy := 0; cy < p.h/2; cy++ {
 		for cx := 0; cx < p.w; cx++ {
-			top, bot := p.at(cx, cy*2), p.at(cx, cy*2+1)
+			top, topOK := p.at(cx, cy*2)
+			bot, botOK := p.at(cx, cy*2+1)
 			switch {
-			case top == nil && bot == nil:
-			case bot == nil:
-				s.set(x0+cx, y0+cy, "▀", 1, uv.Style{Fg: top})
-			case top == nil:
-				s.set(x0+cx, y0+cy, "▄", 1, uv.Style{Fg: bot})
-			case npSameColor(top, bot):
-				s.set(x0+cx, y0+cy, "█", 1, uv.Style{Fg: top})
+			case !topOK && !botOK:
+			case !botOK:
+				s.setRGBA(x0+cx, y0+cy, "▀", 1, top, color.RGBA{}, true, false, false)
+			case !topOK:
+				s.setRGBA(x0+cx, y0+cy, "▄", 1, bot, color.RGBA{}, true, false, false)
+			case top == bot:
+				s.setRGBA(x0+cx, y0+cy, "█", 1, top, color.RGBA{}, true, false, false)
 			default:
-				s.set(x0+cx, y0+cy, "▀", 1, uv.Style{Fg: top, Bg: bot})
+				s.setRGBA(x0+cx, y0+cy, "▀", 1, top, bot, true, true, false)
 			}
 		}
 	}
@@ -209,6 +636,14 @@ var npSegmentPixels = [7][4][2]int{
 	{{0, 3}, {1, 3}, {2, 3}, {3, 3}}, // g
 }
 
+func npLerpRGBA(from, to color.RGBA, t float64) color.RGBA {
+	t = min(max(t, 0), 1)
+	mix := func(a, b uint8) uint8 {
+		return uint8(float64(a)*(1-t) + float64(b)*t)
+	}
+	return color.RGBA{mix(from.R, to.R), mix(from.G, to.G), mix(from.B, to.B), 0xFF}
+}
+
 func npLerp(from, to color.Color, t float64) color.Color {
 	t = min(max(t, 0), 1)
 	r1, g1, b1, _ := from.RGBA()
@@ -221,15 +656,18 @@ func npLerp(from, to color.Color, t float64) color.Color {
 
 // fillBackground gives every cell without a background the page background.
 func (s *npScreen) fillBackground() {
-	for y := 0; y < s.h; y++ {
-		line := s.buf.Line(y)
-		for x := range line {
-			if line[x].Width == 0 && line[x].Content == "" {
-				continue // wide-cell placeholder
-			}
-			if line[x].Style.Bg == nil {
-				line[x].Style.Bg = s.pal.Bg
-			}
+	if s.buf == nil {
+		return
+	}
+	cells := s.buf.cells
+	for i := range cells {
+		c := &cells[i]
+		if c.Width == 0 && c.Content == "" {
+			continue // wide-cell placeholder
+		}
+		if !c.HasBg {
+			c.Bg = s.pal.Bg
+			c.HasBg = true
 		}
 	}
 }
@@ -247,15 +685,18 @@ func (s *npScreen) drawDeck(f *deck.Frame, x, y int) {
 			continue
 		}
 		cx, cy := x+i%f.W, y+i/f.W
+		if cx < 0 || cx >= s.w || cy < 0 || cy >= s.h {
+			continue
+		}
 		if c.Shadow > 0 && s.shade(cx, cy, c.Shadow) {
 			continue
 		}
-		// The frame outlives serialization; borrowing avoids per-cell color boxes.
-		st := uv.Style{Bg: &c.Bg}
-		if c.Ch != " " {
-			st.Fg = &c.Fg
+		hasFg := c.Ch != " "
+		var fg color.RGBA
+		if hasFg {
+			fg = c.Fg
 		}
-		s.set(cx, cy, c.Ch, 1, st)
+		s.setRGBA(cx, cy, c.Ch, 1, fg, c.Bg, hasFg, true, false)
 	}
 }
 
@@ -272,25 +713,29 @@ func (s *npScreen) drawDeckOverStage(f *deck.Frame, x, y int) {
 			continue
 		}
 		cx, cy := x+i%f.W, y+i/f.W
+		if cx < 0 || cx >= s.w || cy < 0 || cy >= s.h {
+			continue
+		}
 		if c.Shadow > 0 && s.shade(cx, cy, c.Shadow) {
 			continue
 		}
-		var under color.Color
-		if ex := s.buf.CellAt(cx, cy); ex != nil && ex.Style.Bg != nil {
-			under = ex.Style.Bg
+		var under color.RGBA
+		var hasUnder bool
+		if ex, ok := s.cellAt(cx, cy); ok && ex.HasBg {
+			under, hasUnder = ex.Bg, true
 		}
-		bg, fg := color.Color(&c.Bg), color.Color(&c.Fg)
-		if under != nil && npNearBg(c.Bg, s.pal.Bg) {
+		bg, fg := c.Bg, c.Fg
+		if hasUnder && npNearBg(c.Bg, s.pal.Bg) {
 			bg = under
 		}
-		if under != nil && npNearBg(c.Fg, s.pal.Bg) {
+		if hasUnder && npNearBg(c.Fg, s.pal.Bg) {
 			fg = under
 		}
-		st := uv.Style{Bg: bg}
-		if c.Ch != " " {
-			st.Fg = fg
+		hasFg := c.Ch != " "
+		if !hasFg {
+			fg = color.RGBA{}
 		}
-		s.set(cx, cy, c.Ch, 1, st)
+		s.setRGBA(cx, cy, c.Ch, 1, fg, bg, hasFg, true, false)
 	}
 }
 
@@ -302,24 +747,26 @@ func npNearBg(a, b color.RGBA) bool {
 // shade darkens the cell at (x, y) by k and reports whether it did; blank
 // cells on the page background are left for the shadow's own glyphs.
 func (s *npScreen) shade(x, y int, k float64) bool {
-	c := s.buf.CellAt(x, y)
-	switch {
-	case c == nil:
+	if s.buf == nil || x < 0 || y < 0 || x >= s.w || y >= s.h {
 		return true
+	}
+	c := &s.buf.cells[y*s.w+x]
+	switch {
 	case c.Width == 0: // the tail of a wide character: its head carries the color
 		return true
-	case (c.Content == " " || c.Content == "") && (c.Style.Bg == nil || npSameColor(c.Style.Bg, s.pal.Bg)):
+	case (c.Content == " " || c.Content == "") && (!c.HasBg || npSameRGBA(c.Bg, s.pal.Bg)):
 		return false
 	}
 	black := color.RGBA{A: 0xff}
-	if c.Style.Fg != nil {
-		c.Style.Fg = npLerp(c.Style.Fg, black, k)
+	if c.HasFg {
+		c.Fg = npLerpRGBA(c.Fg, black, k)
 	}
-	bg := c.Style.Bg
-	if bg == nil {
+	bg := c.Bg
+	if !c.HasBg {
 		bg = s.pal.Bg
 	}
-	c.Style.Bg = npLerp(bg, black, k)
+	c.Bg = npLerpRGBA(bg, black, k)
+	c.HasBg = true
 	return true
 }
 

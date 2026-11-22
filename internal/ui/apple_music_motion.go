@@ -211,7 +211,7 @@ func (p *AppleMusicPage) mechanics(now time.Time) deck.WalkmanState {
 	if p.bayID != "" {
 		style = p.bayStyle
 	}
-	st := deck.WalkmanState{State: deck.State{Style: style, TrackNum: p.bayNumber, Radii: deck.PackRadii(p.progress(), false), Angles: p.reels.Angles}}
+	st := deck.WalkmanState{State: deck.State{Style: style, TrackNum: p.bayNumber, Radii: deck.PackRadii(p.reels.Progress(now, p.progress()), false), Angles: p.reels.Angles}}
 	if p.inserting {
 		st.TrackNum = p.insertNumber
 	}
@@ -224,6 +224,14 @@ func (p *AppleMusicPage) mechanics(now time.Time) deck.WalkmanState {
 	if p.ready() && p.state.Playing {
 		st.Keys = deck.KeyPlay
 		st.Blur = p.reels.Blur()
+	}
+	if p.seeking(now) {
+		if p.windDir < 0 {
+			st.Keys |= deck.KeyRew
+		} else if p.windDir > 0 {
+			st.Keys |= deck.KeyFF
+		}
+		st.Blur = max(st.Blur, max(p.reels.Blur(), .85))
 	}
 	if p.inserting && now.Before(p.insertStart) {
 		if p.insertOldPresent {
@@ -279,7 +287,11 @@ func (p *AppleMusicPage) sceneBasePose(now time.Time) deck.Pose {
 func (p *AppleMusicPage) walkmanPose(now time.Time, z float64) deck.Pose {
 	pose := p.sceneBasePose(now)
 	if p.level != motion.Off && !p.inserting && p.swapStart.IsZero() {
-		ms := (now.UnixMilli() / 40) * 40
+		stepMs := int64(125)
+		if p.state.Playing || p.camera.active(now) || p.sceneMotion.active(now) || p.drawerTween.active(now) || p.panelTween.active(now) || p.rackAnimating(now) || p.seeking(now) || p.reels.Winding(now) {
+			stepMs = 40
+		}
+		ms := (now.UnixMilli() / stepMs) * stepMs
 		t := float64(ms) / 1000.0
 		scale := 1.0
 		if p.level == motion.Subtle {

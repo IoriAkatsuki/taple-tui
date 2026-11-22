@@ -233,18 +233,38 @@ async (request) => {
   };
   if (request.op === 'snapshot') {
     const items = Array.from(mk.queue?.items || []);
+    const revKey = Symbol.for('tapefox.appleQueueRev');
+    const sigKey = Symbol.for('tapefox.appleQueueSig');
     const current = track(mk.nowPlayingItem);
     if (number(mk.currentPlaybackDuration) > 0) current.duration = mk.currentPlaybackDuration;
+    let sig = (mk.isAuthorized ? '1' : '0') + '|' + String(mk.storefrontId || '') + '|' + items.length + '|';
+    for (let i = 0; i < items.length && i < 50; i++) {
+      const it = items[i], attr = it?.attributes;
+      sig += String(it?.id || '') + ':' + String(attr?.name || attr?.title?.stringForDisplay || '') + ':' + String(attr?.artistName || '') + ':' + String(number(attr?.durationInMillis)) + '\x1e';
+    }
+    if (!globalThis[revKey] || globalThis[sigKey] !== sig) {
+      globalThis[sigKey] = sig;
+      globalThis[revKey] = Math.max((globalThis[revKey] || Math.floor(Date.now())) + 1, 1);
+    }
+    const queueRev = globalThis[revKey];
+    const unchanged = typeof request.knownQueueRev === 'number' && request.knownQueueRev > 0 && request.knownQueueRev === queueRev;
     const playbackType = mk.nowPlayingItem?.playbackType;
     const preview = !!mk.previewOnly || (MusicKit.PlaybackType?.preview !== undefined && playbackType === MusicKit.PlaybackType.preview);
     const full = !preview && ['encryptedFull', 'unencryptedFull'].some(kind =>
       MusicKit.PlaybackType?.[kind] !== undefined && playbackType === MusicKit.PlaybackType[kind]);
     const paused = MusicKit.PlaybackStates?.paused !== undefined && mk.playbackState === MusicKit.PlaybackStates.paused;
-    return {data: {ready: true, authorized: !!mk.isAuthorized, playing: !!mk.isPlaying, paused,
+    const data = {ready: true, authorized: !!mk.isAuthorized, playing: !!mk.isPlaying, paused,
       autoplayAvailable: typeof mk.autoplayEnabled === 'boolean', autoplay: mk.autoplayEnabled === true,
       preview, full, position: number(mk.currentPlaybackTime), volume: number(mk.volume),
-      storefront: String(mk.storefrontId || ''), track: current, queue: items.slice(0, 50).map(track),
-      queueIndex: number(mk.nowPlayingItemIndex), queueTotal: items.length}};
+      storefront: String(mk.storefrontId || ''), track: current,
+      queueIndex: number(mk.nowPlayingItemIndex), queueTotal: items.length,
+      queueRev};
+    if (unchanged) {
+      data.queueUnchanged = true;
+    } else {
+      data.queue = items.slice(0, 50).map(track);
+    }
+    return {data};
   }
   let timer;
   const collectionAbort = request.op === 'play-collection' || (['play','enqueue'].includes(request.op) && request.resourceType === 'library-songs') ? new AbortController() : null;

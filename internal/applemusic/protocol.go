@@ -93,33 +93,62 @@ func (c *pipe) close() {
 	})
 }
 
+var (
+	replyChanPool = sync.Pool{New: func() any { return make(chan reply, 1) }}
+	errChanPool   = sync.Pool{New: func() any { return make(chan error, 1) }}
+	writeBufPool  = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+)
+
 func (c *pipe) call(ctx context.Context, session, method string, params, result any) error {
 	c.mu.Lock()
 	c.next++
 	id := c.next
-	ch := make(chan reply, 1)
+	ch := replyChanPool.Get().(chan reply)
+	select {
+	case <-ch:
+	default:
+	}
 	c.pending[id] = ch
 	c.mu.Unlock()
 	defer func() { c.mu.Lock(); delete(c.pending, id); c.mu.Unlock() }()
-	data, err := json.Marshal(struct {
+	buf := writeBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	enc := json.NewEncoder(buf)
+	if err := enc.Encode(struct {
 		ID        int    `json:"id"`
 		Method    string `json:"method"`
 		Params    any    `json:"params,omitempty"`
 		SessionID string `json:"sessionId,omitempty"`
-	}{id, method, params, session})
-	if err != nil {
+	}{id, method, params, session}); err != nil {
+		writeBufPool.Put(buf)
 		return err
 	}
-	w := pipeWrite{append(data, 0), make(chan error, 1)}
+	raw := buf.Bytes()
+	if n := len(raw); n > 0 && raw[n-1] == '\n' {
+		raw[n-1] = 0
+	} else {
+		buf.WriteByte(0)
+		raw = buf.Bytes()
+	}
+	errCh := errChanPool.Get().(chan error)
+	select {
+	case <-errCh:
+	default:
+	}
+	w := pipeWrite{raw, errCh}
 	select {
 	case c.writes <- w:
 	case <-ctx.Done():
+		writeBufPool.Put(buf)
 		return ctx.Err()
 	case <-c.done:
+		writeBufPool.Put(buf)
 		return errors.New("Chrome 已关闭，请退出后重新启动 apple-music")
 	}
 	select {
-	case err = <-w.done:
+	case err := <-w.done:
+		writeBufPool.Put(buf)
+		errChanPool.Put(errCh)
 		if err != nil {
 			return errors.New("Chrome 控制管道已断开")
 		}
@@ -130,6 +159,7 @@ func (c *pipe) call(ctx context.Context, session, method string, params, result 
 	}
 	select {
 	case r := <-ch:
+		replyChanPool.Put(ch)
 		if r.Error != nil {
 			return fmt.Errorf("Chrome 协议错误 (%d)，请检查浏览器页面", r.Error.Code)
 		}

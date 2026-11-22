@@ -61,3 +61,41 @@ func walkmanBounds(v View, cam camera, pose Pose, sc *walkmanScene) image.Rectan
 	}
 	return image.Rect(max(0, int(math.Floor(loX))-1), max(0, int(math.Floor(loY))-1), min(v.W, int(math.Ceil(hiX))+1), min(v.H, int(math.Ceil(hiY))+1)).Intersect(image.Rect(0, 0, v.W, v.H))
 }
+
+// WalkmanProjectedBounds returns the projected screen-cell rectangle of st
+// without running ray-casting or GPU compute.
+func WalkmanProjectedBounds(v View, pose Pose, st WalkmanState) image.Rectangle {
+	if v.Tier == 0 || v.Tier == Braille {
+		v.Tier = Quadrant
+	}
+	if v.W <= 0 || v.H <= 0 {
+		return image.Rectangle{}
+	}
+	cam := walkmanCamera(v)
+	rot := rotation(pose.Yaw, pose.Pitch, pose.Roll)
+	cassetteRot := rot.mul(walkmanVerticalRot)
+	position, cassetteScale := walkmanCassettePlacement(cam, pose, st)
+	sc := walkmanScene{
+		st:       st,
+		position: position,
+		scale:    cassetteScale,
+		bodyRot:  rot,
+		cassette: scene{rot: cassetteRot},
+	}
+	if st.FlightFrom.W > 0 && st.FlightFrom.H > 0 && st.Flight < 1 {
+		u := max(st.Flight, 0)
+		from := st.FlightPose
+		if from == (Pose{}) {
+			from = pose
+		}
+		toYaw, toPitch, toRoll := pose.Yaw, pose.Pitch, pose.Roll+walkmanVerticalRoll
+		if st.OnlyCassette {
+			toYaw, toPitch, toRoll = from.Yaw, from.Pitch, from.Roll
+		}
+		sc.flightRot = rotation(from.Yaw+(toYaw-from.Yaw)*u, from.Pitch+(toPitch-from.Pitch)*u, from.Roll+(toRoll-from.Roll)*u)
+		if sc.flightRot == cassetteRot {
+			sc.flightRot = mat3{}
+		}
+	}
+	return walkmanBounds(v, cam, pose, &sc)
+}

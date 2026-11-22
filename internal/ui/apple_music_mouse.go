@@ -2,12 +2,12 @@ package ui
 
 import (
 	"image"
+	"image/color"
 	"math"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/go-musicfox/go-musicfox/internal/applemusic"
 	"github.com/go-musicfox/go-musicfox/internal/ui/deck"
 )
@@ -150,21 +150,26 @@ func (p *AppleMusicPage) drawKeys(x, y, w int, keys []struct{ key, label string 
 		hovered := p.hoverX >= x && p.hoverX < x+width && p.hoverY == y
 		active := (len(item.key) == 1 && item.key[0] >= '1' && item.key[0] <= '3' && int(p.drawer) == int(item.key[0]-'1')) ||
 			(item.key == "i" && p.scene == appleListen) || (item.key == "z" && p.zoomed)
-		badgeSt := uv.Style{Fg: appleNeon.Text, Bg: appleNeon.Surface, Attrs: uv.AttrBold}
-		labelSt := uv.Style{Fg: appleNeon.Secondary}
+		badgeBg := color.RGBA{0x2b, 0x24, 0x35, 0xff}
+		badgeFg := appleNeon.Text
+		labelFg := appleNeon.Secondary
+		labelBg := color.RGBA{}
+		hasLabelBg := false
 		if active {
-			badgeSt.Fg = appleNeon.Accent
-			labelSt.Fg, labelSt.Attrs = appleNeon.Text, uv.AttrBold
+			badgeFg = appleNeon.Bg
+			badgeBg = appleNeon.Accent
+			labelFg = appleNeon.Text
 		}
 		if hovered {
-			badgeSt.Fg = appleNeon.Hero
-			labelSt.Fg, labelSt.Bg = appleNeon.Hero, appleNeon.Surface
+			badgeFg = appleNeon.Bg
+			badgeBg = appleNeon.Hero
+			labelFg, labelBg, hasLabelBg = appleNeon.Hero, appleNeon.Surface, true
 		}
 		if idx := strings.IndexByte(item.label, ' '); idx > 0 {
-			kw := p.screen.text(x, y, item.label[:idx], badgeSt, width)
-			p.screen.text(x+kw, y, item.label[idx:], labelSt, max(0, width-kw))
+			kw := p.screen.textRGBA(x, y, item.label[:idx], badgeFg, badgeBg, true, true, true, width)
+			p.screen.textRGBA(x+kw, y, item.label[idx:], labelFg, labelBg, true, hasLabelBg, active, max(0, width-kw))
 		} else {
-			p.screen.text(x, y, item.label, badgeSt, width)
+			p.screen.textRGBA(x, y, item.label, badgeFg, badgeBg, true, true, true, width)
 		}
 		p.addHit(appleHit{kind: appleHitKey, x: x, y: y, w: width, h: 1, key: item.key})
 		x += width + 2

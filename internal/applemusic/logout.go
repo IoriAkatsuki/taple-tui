@@ -8,6 +8,15 @@ import (
 
 // logout forgets this application's browser session, not Apple's server-side authorization.
 func (b *Browser) logout(ctx context.Context) error {
+	if err := b.waitReady(ctx); err != nil {
+		b.lifecycle.Lock()
+		stopped := b.stopped
+		b.lifecycle.Unlock()
+		if stopped {
+			return errors.New("播放器已关闭，请重启后重试清空登录")
+		}
+		return err
+	}
 	b.lifecycle.Lock()
 	defer b.lifecycle.Unlock()
 	if b.stopped {
@@ -17,6 +26,7 @@ func (b *Browser) logout(ctx context.Context) error {
 		return err
 	}
 	b.stopProcess()
+	b.invalidateQueue()
 	b.stopped = true
 	if err := clearOwnedProfile(b.profile, b.profileInfo); err != nil {
 		return errors.New("本地登录清空未完成，播放器已停止；请重启后重试")

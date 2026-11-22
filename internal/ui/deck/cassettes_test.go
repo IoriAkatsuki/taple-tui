@@ -63,20 +63,20 @@ func TestCassettePatternsAtSpecifiedCoordinates(t *testing.T) {
 		u, v  float64
 		want  color.RGBA
 	}{
-		{1, 18, 14, color.RGBA{255, 43, 214, 255}},
-		{1, 40, 5, color.RGBA{18, 10, 26, 255}},
-		{2, 30, 12, color.RGBA{0, 229, 255, 255}},
-		{2, 24.2, 6, color.RGBA{14, 42, 51, 255}},
-		{2, 26, 6, color.RGBA{154, 163, 184, 255}},
-		{3, 40, 12, color.RGBA{58, 36, 8, 255}},
-		{3, 57.5, 6.5, color.RGBA{255, 176, 0, 255}},
-		{4, 40, 11.4, color.RGBA{255, 59, 92, 255}},
-		{4, 40, 12.3, color.RGBA{255, 210, 63, 255}},
-		{4, 40, 13.2, color.RGBA{0, 229, 255, 255}},
-		{5, 40, 6, color.RGBA{255, 43, 214, 255}},
-		{5, 40, 10, color.RGBA{255, 107, 0, 255}},
-		{5, 40, 14, color.RGBA{255, 176, 0, 255}},
-		{5, 40, 9.5, color.RGBA{244, 239, 230, 255}},
+		{1, 18, 14, color.RGBA{255, 107, 74, 255}},
+		{1, 40, 5, color.RGBA{22, 18, 28, 255}},
+		{2, 30, 12, color.RGBA{46, 216, 198, 255}},
+		{2, 24.2, 6, color.RGBA{26, 36, 48, 255}},
+		{2, 26, 6, color.RGBA{196, 202, 212, 255}},
+		{3, 40, 12, color.RGBA{54, 34, 14, 255}},
+		{3, 57.5, 6.5, color.RGBA{245, 185, 66, 255}},
+		{4, 40, 11.4, color.RGBA{255, 107, 74, 255}},
+		{4, 40, 12.3, color.RGBA{245, 185, 66, 255}},
+		{4, 40, 13.2, color.RGBA{46, 216, 198, 255}},
+		{5, 40, 6, color.RGBA{255, 107, 74, 255}},
+		{5, 40, 10, color.RGBA{255, 118, 56, 255}},
+		{5, 40, 14, color.RGBA{245, 185, 66, 255}},
+		{5, 40, 9.5, color.RGBA{244, 236, 222, 255}},
 	} {
 		m := cassetteMaterials(cassetteTestPalette, tt.style, 42)
 		if got := labelAt(&m, tt.u, tt.v, 0, 2).albedo.rgba(); got != tt.want {

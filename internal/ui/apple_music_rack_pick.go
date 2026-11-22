@@ -96,9 +96,19 @@ func (p *AppleMusicPage) renderRackFolderPickup(fit *deck.Rect, pose deck.Pose, 
 	view.Fit = *fit
 	view.Fit.Y -= 3
 	st := deck.FolderState{Style: deck.FolderStyleForID(pick.current.id), TabSlot: uint8(index % 3), Open: amount}
+	if proj := deck.FolderProjectedBounds(view, pose, st).Add(image.Pt(0, 3)); proj.Dx() > 2 {
+		dx := 0
+		if proj.Min.X+1 < clip.Min.X {
+			dx = clip.Min.X - (proj.Min.X + 1)
+		}
+		if proj.Max.X-1 > clip.Max.X {
+			dx = clip.Max.X - (proj.Max.X - 1)
+		}
+		view.Fit.X += float64(dx)
+	}
 	frame := pick.folder.RenderFolder(view, pose, st)
 	bounds := appleFrameBounds(frame, 0, 3)
-	for range 2 {
+	for range 1 {
 		dx := 0
 		if bounds.Min.X < clip.Min.X {
 			dx = clip.Min.X - bounds.Min.X
@@ -122,9 +132,19 @@ func (p *AppleMusicPage) renderRackFolderPickup(fit *deck.Rect, pose deck.Pose, 
 func (p *AppleMusicPage) renderRackPickup(state *deck.WalkmanState, clip image.Rectangle, now time.Time) (*deck.Frame, image.Rectangle) {
 	pick := &p.rackPickup
 	basePose := p.sceneBasePose(now)
+	if proj := deck.WalkmanProjectedBounds(p.rackView, basePose, *state).Add(image.Pt(0, 3)); proj.Dx() > 2 {
+		dx := 0
+		if proj.Min.X+1 < clip.Min.X {
+			dx = clip.Min.X - (proj.Min.X + 1)
+		}
+		if proj.Max.X-1 > clip.Max.X {
+			dx = clip.Max.X - (proj.Max.X - 1)
+		}
+		state.FlightFrom.X += float64(dx)
+	}
 	frame := pick.renderer.RenderWalkman(p.rackView, deckPaletteOf(appleNeon), basePose, *state)
 	bounds := appleFrameBounds(frame, 0, 3)
-	for range 2 {
+	for range 1 {
 		dx := 0
 		if bounds.Min.X < clip.Min.X {
 			dx = clip.Min.X - bounds.Min.X

@@ -53,7 +53,15 @@ func NewAppleMusicCommand() *gcli.Command {
 				}
 				defer os.RemoveAll(profile)
 			}
-			browser, err := applemusic.Open(ctx, profile)
+			var (
+				browser *applemusic.Browser
+				err     error
+			)
+			if cookies.Count() > 0 {
+				browser, err = applemusic.Open(ctx, profile)
+			} else {
+				browser, err = applemusic.OpenAsync(ctx, profile)
+			}
 			if err != nil {
 				return err
 			}

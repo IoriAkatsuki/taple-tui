@@ -22,10 +22,11 @@ func parseLyricsTTML(input string) (Lyrics, error) {
 		line, column := d.InputPos()
 		return fmt.Errorf("%s（XML %d:%d）", reason, line, column)
 	}
-	depth, bodyDepth, lineDepth := 0, 0, 0
+	depth, bodyDepth, lineDepth, timedSpanDepth := 0, 0, 0, 0
 	root, body, closed, plain := false, false, false, false
-	var text strings.Builder
+	var text, spanText strings.Builder
 	var line LyricLine
+	var spanStart, spanEnd time.Duration
 	lineTimed := false
 	for {
 		token, err := d.Token()
@@ -77,6 +78,8 @@ func parseLyricsTTML(input string) (Lyrics, error) {
 				}
 				lineDepth = depth
 				text.Reset()
+				spanText.Reset()
+				timedSpanDepth = 0
 				line = LyricLine{}
 				begin, end, duration := attr("begin"), attr("end"), attr("dur")
 				lineTimed = begin != "" && (end != "" || duration != "")
@@ -102,14 +105,46 @@ func parseLyricsTTML(input string) (Lyrics, error) {
 				}
 			} else if lineDepth > 0 && node.Name.Local == "br" {
 				text.WriteByte(' ')
+				if timedSpanDepth > 0 {
+					spanText.WriteByte(' ')
+				}
+			} else if lineDepth > 0 && timedSpanDepth == 0 && node.Name.Local == "span" {
+				sb, se, sd := attr("begin"), attr("end"), attr("dur")
+				if sb != "" && (se != "" || sd != "") {
+					startDur, err1 := parseLyricTime(sb)
+					var endDur time.Duration
+					var err2 error
+					if se != "" {
+						endDur, err2 = parseLyricTime(se)
+					} else {
+						var length time.Duration
+						length, err2 = parseLyricTime(sd)
+						endDur = startDur + length
+					}
+					if err1 == nil && err2 == nil && startDur >= 0 && endDur > startDur && endDur <= 24*time.Hour {
+						timedSpanDepth = depth
+						spanStart, spanEnd = startDur, endDur
+						spanText.Reset()
+					}
+				}
 			}
 		case xml.CharData:
 			if lineDepth > 0 {
 				text.Write(node)
+				if timedSpanDepth > 0 {
+					spanText.Write(node)
+				}
 			} else if depth == 0 && strings.TrimSpace(string(node)) != "" {
 				return result, invalid("根节点之外存在文本")
 			}
 		case xml.EndElement:
+			if timedSpanDepth > 0 && depth == timedSpanDepth {
+				if st := strings.Join(strings.Fields(spanText.String()), " "); st != "" {
+					line.Spans = append(line.Spans, LyricSpan{Text: st, Start: spanStart, End: spanEnd})
+				}
+				timedSpanDepth = 0
+				spanText.Reset()
+			}
 			if depth == lineDepth {
 				line.Text = strings.Join(strings.Fields(text.String()), " ")
 				if line.Text != "" {
@@ -123,6 +158,7 @@ func parseLyricsTTML(input string) (Lyrics, error) {
 					return result, invalid("歌词超过 10000 行")
 				}
 				lineDepth = 0
+				timedSpanDepth = 0
 			}
 			if depth == bodyDepth {
 				bodyDepth = 0

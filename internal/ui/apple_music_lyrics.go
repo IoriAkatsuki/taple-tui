@@ -24,6 +24,7 @@ type appleLyricsMsg struct {
 type appleLyricRow struct {
 	text               string
 	line               int
+	colOffset          int
 	startFrac, endFrac float64
 }
 
@@ -155,6 +156,7 @@ func (p *AppleMusicPage) drawLyrics(r image.Rectangle, now time.Time, reveal flo
 		return
 	}
 	p.lyrics.area = r
+	p.screen.fillRGBA(r.Min.X, r.Min.Y, r.Dx(), r.Dy(), color.RGBA{0x12, 0x12, 0x1d, 0xff})
 	y, rows := r.Min.Y, r.Dy()
 	position, sync := p.lyricsPosition(now)
 	if rows >= 3 {
@@ -242,6 +244,9 @@ func (p *AppleMusicPage) drawLyricsEmpty(x, y, w, rows int, reveal float64) {
 	if p.lyrics.status == "parse_error" && p.lyrics.data.Detail != "" {
 		label = T("lyrics.parse_detail", p.lyrics.data.Detail)
 	}
+	if p.drawLyricsCozyEmpty(x, y, w, rows, label, reveal) {
+		return
+	}
 	for i, text := range strings.Split(ansi.WrapWc(label, max(1, w), ""), "\n") {
 		if i >= rows {
 			break
@@ -270,11 +275,20 @@ func (p *AppleMusicPage) layoutLyricRows(w int, position time.Duration, sync boo
 		if !rewrap {
 			continue
 		}
-		parts := strings.Split(ansi.WrapWc(npSanitize(line.Text), wrapW, ""), "\n")
+		clean := npSanitize(line.Text)
+		parts := strings.Split(ansi.WrapWc(clean, wrapW, ""), "\n")
 		n := max(1, len(parts))
+		cursor := 0
 		for j, text := range parts {
+			colOff := 0
+			if text != "" {
+				if idx := strings.Index(clean[cursor:], text); idx >= 0 {
+					colOff = npWidth(clean[:cursor+idx])
+					cursor += idx + len(text)
+				}
+			}
 			p.lyrics.rows = append(p.lyrics.rows, appleLyricRow{
-				text: text, line: i,
+				text: text, line: i, colOffset: colOff,
 				startFrac: float64(j) / float64(n), endFrac: float64(j+1) / float64(n),
 			})
 		}

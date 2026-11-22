@@ -174,6 +174,16 @@ func fitCell(px []rgb, t Tier) Cell {
 	return Cell{Ch: g, Fg: fg.rgba(), Bg: bg.rgba()}
 }
 
+// FitCellRGBA quantizes RGBA sub-pixels using the active glyph tier solver.
+func FitCellRGBA(samples []color.RGBA, t Tier) Cell {
+	var buf [8]rgb
+	n := min(len(samples), len(buf))
+	for i := range n {
+		buf[i] = rgbOf(samples[i])
+	}
+	return fitCell(buf[:n], t)
+}
+
 func mean(cs []rgb) rgb {
 	var m rgb
 	for _, c := range cs {

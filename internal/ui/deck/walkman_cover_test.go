@@ -31,11 +31,11 @@ func TestWalkmanStorageCoverZeroKeepsOriginalFrame(t *testing.T) {
 		want string
 	}{
 		{"source", View{W: 140, H: 42, Tier: Quadrant, Fit: Rect{80, 2, 58, 34}}, WalkmanState{
-			Cassette: 1, FlightFrom: Rect{6, 10, 54, 14}, FlightPose: Pose{Pitch: 1.3}, OnlyCassette: true}, "c5f8bde95326e9b5173c82daaebc8094647f0cce3ee78f6fd49f141df496f33f"},
+			Cassette: 1, FlightFrom: Rect{6, 10, 54, 14}, FlightPose: Pose{Pitch: 1.3}, OnlyCassette: true}, "2195d2805926b814c359ea141dabc8fa225c311392cf135e61702c8c5668e0b3"},
 		{"flight", View{W: 140, H: 42, Tier: Sextant, Aspect: 2.4, Fit: Rect{80, 2, 58, 34}}, WalkmanState{
-			Door: .6, Cassette: 1, FlightFrom: Rect{6, 10, 54, 14}, FlightPose: Pose{Pitch: 1.3}, Flight: .5}, "8ef79970976e1dbe9ed81380f502f7558e6e4508b56def2166efe36592dd60c2"},
+			Door: .6, Cassette: 1, FlightFrom: Rect{6, 10, 54, 14}, FlightPose: Pose{Pitch: 1.3}, Flight: .5}, "1761db93ada78d1e5b3b374108e1aedec767f9704d279200f104e8dbf7c6866a"},
 		{"device", View{W: 100, H: 34, Tier: Octant, Fit: Rect{40, 1, 58, 30}}, WalkmanState{
-			Door: .4, Cassette: .25, Keys: KeyPlay}, "30d58dc03d35435c70ddfe7a61fd712a16a35615fdad1dfe4b3a988b684c07fe"},
+			Door: .4, Cassette: .25, Keys: KeyPlay}, "e56738d13ab27eac892f699836ba7fa287c0b5e94d5c03774fbff767021f3feb"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.st.State = State{Style: 4, TrackNum: 42, Radii: ReelRadii(.4), Angles: [2]float64{.6, 1.3}}

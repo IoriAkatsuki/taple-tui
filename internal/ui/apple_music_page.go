@@ -26,6 +26,7 @@ type appleMusicClient interface {
 }
 
 type applePollMsg struct{}
+type appleStandbyTickMsg struct{}
 type appleStateMsg struct {
 	state      applemusic.State
 	err        error
@@ -125,10 +126,18 @@ type AppleMusicPage struct {
 	renderBackend                         string
 	screen                                npScreen
 	desk                                  appleDeskStage
+	glowBuf                               []float64
 	hits                                  []appleHit
 	hoverX, hoverY                        int
 	mousePointer                          string
 	counter                               CounterState
+	windUntil                             time.Time
+	windDir                               int
+	meterPeak                             [2]float64
+	meterPeakAt                           [2]time.Time
+	meterLastTick                         time.Time
+	termBlurred                           bool
+	standbyTickScheduled                  bool
 }
 
 func NewAppleMusicPage(client appleMusicClient) *AppleMusicPage {
@@ -189,8 +198,11 @@ func (p *AppleMusicPage) acceptState(s applemusic.State, now time.Time) {
 	} else if s.Ready && !s.Authorized {
 		p.status = T("status.unauthorized")
 	}
-	if p.state.Track.ID != "" && s.Track.ID != "" && s.Track.ID != p.state.Track.ID && p.level == motion.Full && !p.inserting && p.swapStart.IsZero() && !p.swap.armed {
-		p.glitchAt = now
+	if p.state.Track.ID != "" && s.Track.ID != "" && s.Track.ID != p.state.Track.ID {
+		p.windUntil, p.windDir = time.Time{}, 0
+		if p.level == motion.Full && !p.inserting && p.swapStart.IsZero() && !p.swap.armed {
+			p.glitchAt = now
+		}
 	}
 	unchangedSkip := p.pending && (p.lastAction.Kind == "next" || p.lastAction.Kind == "previous") &&
 		p.playAcknowledged == p.playGeneration && s.Ready && s.Authorized && s.Track.ID != "" &&
@@ -296,6 +308,12 @@ func (p *AppleMusicPage) Update(msg tea.Msg, a *model.App) (model.Page, tea.Cmd)
 		p.hoverX, p.hoverY = -1, -1
 		p.mousePointer = "default"
 		cmd = a.SetMousePointer("default")
+	case tea.FocusMsg:
+		p.termBlurred = false
+	case tea.BlurMsg:
+		p.termBlurred = true
+	case appleStandbyTickMsg:
+		p.standbyTickScheduled = false
 	case applePollMsg:
 		p.checkPlaybackWait(now)
 		if p.loggingOut {
@@ -379,14 +397,22 @@ func (p *AppleMusicPage) Update(msg tea.Msg, a *model.App) (model.Page, tea.Cmd)
 		}
 	}
 	p.advance(now)
-	if p.meter != nil && p.meter.Frame().Ready {
-		a.AnimateSlow(100 * time.Millisecond)
+	if !p.termBlurred && p.meter != nil && p.meter.Frame().Ready {
+		a.AnimateSlow(125 * time.Millisecond)
 	}
-	if p.level != motion.Off {
-		if p.camera.active(now) || p.sceneMotion.active(now) || p.drawerTween.active(now) || p.panelTween.active(now) || p.inserting || !p.swapStart.IsZero() || p.rackAnimating(now) || (p.ready() && p.state.Playing) {
+	if p.level != motion.Off && !p.termBlurred {
+		if p.camera.active(now) || p.sceneMotion.active(now) || p.drawerTween.active(now) || p.panelTween.active(now) || p.inserting || !p.swapStart.IsZero() || p.rackAnimating(now) || p.seeking(now) || p.reels.Winding(now) || (p.ready() && p.state.Playing) {
 			a.Animate(50 * time.Millisecond)
-		} else if p.state.Playing || p.reels.Moving() || (a.WindowWidth() >= 60 && a.WindowHeight() >= 20) {
+		} else if p.state.Playing || p.reels.Moving() {
 			a.AnimateSlow(100 * time.Millisecond)
+		} else if p.level == motion.Full && a.WindowWidth() >= 60 && a.WindowHeight() >= 20 && !p.standbyTickScheduled {
+			p.standbyTickScheduled = true
+			tick := tea.Tick(125*time.Millisecond, func(time.Time) tea.Msg { return appleStandbyTickMsg{} })
+			if cmd == nil {
+				cmd = tick
+			} else {
+				cmd = tea.Batch(cmd, tick)
+			}
 		}
 	}
 	return p, cmd
@@ -681,6 +707,26 @@ func (p *AppleMusicPage) advance(now time.Time) {
 	}
 	p.gpuMu.Unlock()
 	meterFrame := p.meter.Frame()
+	if !meterFrame.Ready {
+		p.meterPeak = [2]float64{}
+		p.meterPeakAt = [2]time.Time{}
+		p.meterLastTick = now
+	} else {
+		dt := 0.0
+		if !p.meterLastTick.IsZero() {
+			dt = min(max(now.Sub(p.meterLastTick).Seconds(), 0), .2)
+		}
+		p.meterLastTick = now
+		for ch := range 2 {
+			lvl := meterLevel(meterFrame.Levels[ch])
+			if lvl >= p.meterPeak[ch] {
+				p.meterPeak[ch] = lvl
+				p.meterPeakAt[ch] = now
+			} else if now.Sub(p.meterPeakAt[ch]) > 1200*time.Millisecond {
+				p.meterPeak[ch] = max(lvl, p.meterPeak[ch]-0.45*dt)
+			}
+		}
+	}
 	if meterFrame.Ready && p.meterError != "" {
 		p.meterError = ""
 		p.status = "VU 电平表已恢复"
@@ -731,9 +777,26 @@ func (p *AppleMusicPage) advance(now time.Time) {
 	if p.level != motion.Off && (p.reelAt.IsZero() || now.Sub(p.reelAt) >= time.Second/60) {
 		dt := min(max(now.Sub(p.reelAt).Seconds(), 0), .1)
 		p.reelAt = now
-		p.reels.Advance(dt, playing, now, deck.PackRadii(p.progress(), false), 1)
+		p.reels.Advance(dt, playing, now, deck.PackRadii(p.reels.Progress(now, p.progress()), false), 1)
 	}
 	p.counter.Update(now, appleDuration(p.state.Position))
+}
+
+func (p *AppleMusicPage) startSeekWind(delta, from, to float64, dur time.Duration, now time.Time) {
+	if p.level == motion.Off || !p.ready() || math.Abs(delta) < 0.5 {
+		return
+	}
+	p.reels.WindWithDuration(delta, now, from, to, dur)
+	if delta > 0 {
+		p.windDir = 1
+	} else {
+		p.windDir = -1
+	}
+	p.windUntil = now.Add(dur)
+}
+
+func (p *AppleMusicPage) seeking(now time.Time) bool {
+	return !p.windUntil.IsZero() && now.Before(p.windUntil) && p.ready() && !p.inserting && p.swapStart.IsZero()
 }
 
 func (p *AppleMusicPage) progress() float64 {

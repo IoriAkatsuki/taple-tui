@@ -42,7 +42,12 @@ func (g *GPU) render(v View, cam camera, pose Pose, sc *walkmanScene, frame *Fra
 		return false
 	}
 	gc, gr := v.Tier.Grid()
-	n := bounds.Dx() * bounds.Dy() * gc * gr * 4
+	scols, srows := gc, gr
+	if v.Tier == Half {
+		scols, srows = 2, 4
+	}
+	sub := scols * srows
+	n := bounds.Dx() * bounds.Dy() * sub * 4
 	if n <= 0 || n > (1<<20)*4 {
 		return false
 	}
@@ -57,7 +62,7 @@ func (g *GPU) render(v View, cam camera, pose Pose, sc *walkmanScene, frame *Fra
 		}
 	}
 	vector := func(i int, v vec3) { put(i, v.x, v.y, v.z) }
-	put(0, float64(v.W), float64(v.H), float64(gc), float64(gr), cam.aspect, cam.cx, cam.cy, cam.focal, 1/scaleOf(pose))
+	put(0, float64(v.W), float64(v.H), float64(scols), float64(srows), cam.aspect, cam.cx, cam.cy, cam.focal, 1/scaleOf(pose))
 	vector(9, sc.bodyRot.applyT(vec3{pose.X, pose.Y, camDist}.mul(-1)).mul(1/scaleOf(pose)))
 	put(12, sc.bodyRot[:]...)
 	crot := sc.cassette.rot
@@ -85,18 +90,25 @@ func (g *GPU) render(v View, cam camera, pose Pose, sc *walkmanScene, frame *Fra
 	}
 	bw, bh := bounds.Dx(), bounds.Dy()
 	fitRow := func(start, end int, out *[8]rgb) {
+		var hits [8]bool
 		for row := start; row < end; row++ {
 			y := bounds.Min.Y + row
 			for col := range bw {
 				i := row*bw + col
 				covered := false
-				for j := 0; j < gc*gr; j++ {
-					at := (i*gc*gr + j) * 4
+				for j := 0; j < sub; j++ {
+					at := (i*sub + j) * 4
 					out[j] = rgb{float64(g.samples[at]), float64(g.samples[at+1]), float64(g.samples[at+2])}
-					covered = covered || g.samples[at+3] > 0
+					hit := g.samples[at+3] > 0
+					hits[j] = hit
+					covered = covered || hit
 				}
 				if covered {
-					frame.Cells[y*v.W+bounds.Min.X+col] = fitCell(out[:gc*gr], v.Tier)
+					if v.Tier == Half {
+						frame.Cells[y*v.W+bounds.Min.X+col] = fitHalfAA(out[:], hits)
+					} else {
+						frame.Cells[y*v.W+bounds.Min.X+col] = fitCell(out[:gc*gr], v.Tier)
+					}
 				}
 			}
 		}

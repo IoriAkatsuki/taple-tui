@@ -2,6 +2,7 @@ package ui
 
 import (
 	"image"
+	"image/color"
 	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
@@ -217,9 +218,23 @@ func (p *AppleMusicPage) drawRackFrame(frame *deck.Frame, clip image.Rectangle) 
 				continue
 			}
 			cell := &frame.Cells[(y-3)*frame.W+x]
-			if cell.Ch != "" {
-				p.screen.set(x, y, cell.Ch, 1, uv.Style{Fg: &cell.Fg, Bg: &cell.Bg})
+			if cell.Ch == "" {
+				continue
 			}
+			if cell.Bg.A == 0 {
+				var bg color.RGBA
+				var hasBg bool
+				if ex, ok := p.screen.cellAt(x, y); ok && ex.HasBg {
+					hasBg = true
+					bg = ex.Bg
+					if cell.Ch == "▄" && ex.Content == "▀" && ex.HasFg {
+						bg = ex.Fg
+					}
+				}
+				p.screen.setRGBA(x, y, cell.Ch, 1, cell.Fg, bg, true, hasBg, false)
+				continue
+			}
+			p.screen.set(x, y, cell.Ch, 1, uv.Style{Fg: &cell.Fg, Bg: &cell.Bg})
 		}
 	}
 }

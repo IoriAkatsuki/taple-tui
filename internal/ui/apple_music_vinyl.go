@@ -131,7 +131,11 @@ func (p *AppleMusicPage) drawAlbumCrate(x, y, w, rows int, now time.Time) bool {
 		lbl := deck.VinylLabels[deck.VinylStyleForID(it.ID)-1]
 		footer = fmt.Sprintf("LP %02d [%s] · %s", p.vinylPickup.current+1, lbl.Name, it.Name)
 	}
-	s.text(x+3, y+rows-1, footer, uv.Style{Fg: s.pal.Secondary, Bg: color.RGBA{24, 20, 28, 255}}, w-6)
+	outerBg := color.RGBA{0x1c, 0x16, 0x24, 0xff}
+	if c, ok := s.cellAt(x+3, y+rows-1); ok && c.HasBg {
+		outerBg = c.Bg
+	}
+	drawCozyPill(s, x+3, y+rows-1, footer, s.pal.Accent2, appleCozyPill, outerBg, s.pal.Text, false, true, max(0, w-6))
 	return true
 }
 
@@ -149,7 +153,7 @@ func (p *AppleMusicPage) drawAlbumCrateSlots(x, y, w, rows, padding, capacity, d
 		}
 		item := items[i]
 		{
-			labelBg := color.RGBA{34, 28, 36, 255}
+			labelBg := color.RGBA{36, 29, 46, 255}
 			if c, ok := s.cellAt(lx, ly); ok && c.HasBg {
 				labelBg = c.Bg
 			}

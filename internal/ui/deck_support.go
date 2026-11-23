@@ -26,6 +26,18 @@ func deckTier(a *model.App) deck.Tier {
 	return deck.DetectTier(deck.Terminal{Getenv: os.Getenv, Version: version})
 }
 
+// applePageTier defaults the Cozy Study Desk UI to 1x2 half-block pixels ("▀")
+// unless the user explicitly configures a specific blockGlyphs tier in config.toml.
+func applePageTier(a *model.App) deck.Tier {
+	if configs.AppConfig != nil {
+		if t, ok := deck.ParseTier(configs.AppConfig.Main.BlockGlyphs); ok {
+			return t
+		}
+	}
+	_ = a
+	return deck.Half
+}
+
 // Multiplexers may report made-up cell sizes; accept plausible shapes only.
 func deckAspect(a *model.App) float64 {
 	if a != nil {

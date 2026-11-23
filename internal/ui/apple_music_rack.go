@@ -243,7 +243,12 @@ func (p *AppleMusicPage) drawRackCabinet(l appleRackLayout, amount float64, now 
 			label = fmt.Sprintf("%02d [%s] · %s", pick.current.index+1, cs.Name, item.name)
 		}
 	}
-	p.screen.text(l.x+3, l.y+l.rows-1, label, uv.Style{Fg: p.screen.pal.Secondary, Bg: color.RGBA{24, 20, 28, 255}}, l.w-6)
+	plaqueBg := appleCozyPill
+	outerBg := color.RGBA{0x1c, 0x16, 0x24, 0xff}
+	if c, ok := p.screen.cellAt(l.x+3, l.y+l.rows-1); ok && c.HasBg {
+		outerBg = c.Bg
+	}
+	drawCozyPill(&p.screen, l.x+3, l.y+l.rows-1, label, p.screen.pal.Accent2, plaqueBg, outerBg, p.screen.pal.Text, false, true, max(0, l.w-6))
 }
 
 // drawRackSlot prints one slot's spine label and records its hit area.
@@ -252,7 +257,7 @@ func (p *AppleMusicPage) drawRackSlot(l appleRackLayout, row int, amount float64
 	i := l.start + row
 	lx, ly, lw := deck.RackLabel(l.w, deck.RackState{Padding: l.padding}, row)
 	lx, ly = l.x+lx, l.y+ly
-	labelBg := color.RGBA{34, 28, 36, 255}
+	labelBg := color.RGBA{36, 29, 46, 255}
 	if c, ok := s.cellAt(lx, ly); p.rackGraphical && ok && c.HasBg {
 		labelBg = c.Bg // print onto the ray-cast spine itself
 	}

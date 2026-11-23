@@ -25,7 +25,7 @@ func TestGPUWalkmanMatchesCPU(t *testing.T) {
 	t.Log(GPUBackend()+" device:", g.Name())
 	var cpu, gpu WalkmanRenderer
 	gpu.SetGPU(g)
-	for _, tier := range []Tier{Quadrant, Sextant, Octant} {
+	for _, tier := range []Tier{Half, Quadrant, Sextant, Octant} {
 		for style := uint8(0); style <= 5; style++ {
 			for phase := range 4 {
 				v := View{W: 96, H: 28, Tier: tier, Aspect: 2}

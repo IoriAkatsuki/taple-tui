@@ -103,14 +103,39 @@ func (r *VinylRenderer) RenderVinyl(v View, pal Palette, pose Pose, st VinylStat
 		hero:    rgbOf(pal.Hero),
 	}
 	gc, gr := v.Tier.Grid()
+	scols, srows := gc, gr
+	if v.Tier == Half {
+		scols, srows = 2, 4
+	}
 	parallel(bounds.Dy(), func(start, end int) {
 		var pixels [8]rgb
 		for y := bounds.Min.Y + start; y < bounds.Min.Y+end; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				if v.Tier == Half {
+					var topSum, botSum rgb
+					topHits, botHits := 0, 0
+					for q := range 8 {
+						fx := float64(x) + (float64(q%2)+.5)/2.0
+						fy := (float64(y) + (float64(q/2)+.5)/4.0) * cam.aspect
+						d := vec3{(fx - cam.cx) / cam.focal, (fy - cam.cy) / cam.focal, 1}
+						c, hit := sc.sample(o, rot.applyT(d).mul(1/scale), d.norm().mul(-1))
+						if hit {
+							if q < 4 {
+								topSum, topHits = topSum.add(c), topHits+1
+							} else {
+								botSum, botHits = botSum.add(c), botHits+1
+							}
+						}
+					}
+					if c := fitHalfMask(topSum, botSum, topHits, botHits); c.Ch != "" {
+						r.frame.Cells[y*w+x] = c
+					}
+					continue
+				}
 				covered := false
-				for q := range gc * gr {
-					fx := float64(x) + (float64(q%gc)+.5)/float64(gc)
-					fy := (float64(y) + (float64(q/gc)+.5)/float64(gr)) * cam.aspect
+				for q := range scols * srows {
+					fx := float64(x) + (float64(q%scols)+.5)/float64(scols)
+					fy := (float64(y) + (float64(q/scols)+.5)/float64(srows)) * cam.aspect
 					d := vec3{(fx - cam.cx) / cam.focal, (fy - cam.cy) / cam.focal, 1}
 					c, hit := sc.sample(o, rot.applyT(d).mul(1/scale), d.norm().mul(-1))
 					covered = covered || hit

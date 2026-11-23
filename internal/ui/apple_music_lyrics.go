@@ -156,7 +156,7 @@ func (p *AppleMusicPage) drawLyrics(r image.Rectangle, now time.Time, reveal flo
 		return
 	}
 	p.lyrics.area = r
-	p.screen.fillRGBA(r.Min.X, r.Min.Y, r.Dx(), r.Dy(), color.RGBA{0x12, 0x12, 0x1d, 0xff})
+	p.screen.fillRGBA(r.Min.X, r.Min.Y, r.Dx(), r.Dy(), appleCozyCard)
 	y, rows := r.Min.Y, r.Dy()
 	position, sync := p.lyricsPosition(now)
 	if rows >= 3 {
@@ -219,7 +219,11 @@ func (p *AppleMusicPage) lyricsLabel(now time.Time) string {
 }
 
 func (p *AppleMusicPage) drawLyricsChrome(r image.Rectangle, y int, sync bool, reveal float64) {
-	p.screen.text(r.Min.X, y, p.lyricsLabel(p.lastFrame), uv.Style{Fg: npLerp(appleNeon.Bg, appleNeon.Secondary, reveal)}, r.Dx())
+	pad := 0
+	if r.Dx() >= 14 {
+		pad = 1
+	}
+	p.screen.text(r.Min.X+pad, y, p.lyricsLabel(p.lastFrame), uv.Style{Fg: npLerp(appleNeon.Bg, appleNeon.Secondary, reveal)}, max(0, r.Dx()-pad*2))
 	keys := []struct{ key, label string }{}
 	if p.lyricsHasText() {
 		if !p.lyrics.data.Synced {
@@ -231,7 +235,7 @@ func (p *AppleMusicPage) drawLyricsChrome(r image.Rectangle, y int, sync bool, r
 	if p.lyrics.status != "loading" && p.state.Ready && p.state.Authorized && p.state.Track.ID != "" && p.state.Storefront != "" {
 		keys = append(keys, struct{ key, label string }{"y", T("lyrics.btn_retry")})
 	}
-	p.drawKeys(r.Min.X, r.Max.Y-1, r.Dx(), keys)
+	p.drawKeys(r.Min.X+pad, r.Max.Y-1, max(0, r.Dx()-pad*2), keys)
 }
 
 func (p *AppleMusicPage) drawLyricsEmpty(x, y, w, rows int, reveal float64) {

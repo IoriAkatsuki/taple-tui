@@ -147,15 +147,75 @@ type Cell struct {
 	// darkens what lies under the cell, 0..1. Ch, Fg and Bg draw it over the
 	// palette background.
 	Shadow float64
+	// Cov optionally encodes fractional edge coverage for 1x2 Half-block SSAA as
+	// 1 + topHits*5 + botHits (topHits, botHits in 0..4), 0 when fully opaque/unset.
+	Cov uint8
 }
 
 // minSplitGain is the per-sub-pixel squared error a split must remove to be
 // worth a glyph; below it the cell is drawn flat, which keeps gradients calm.
 const minSplitGain = 18.0
 
+// fitHalfMask downsamples hitting-only 2x2 sub-rays for transparent 1x2 models
+// (vinyl records and file folders) so silhouette edges carry no black background bleed.
+func fitHalfMask(topSum, botSum rgb, topHits, botHits int) Cell {
+	switch {
+	case topHits == 0 && botHits == 0:
+		return Cell{}
+	case topHits > 0 && botHits == 0:
+		return Cell{Ch: "▀", Fg: topSum.scale(1 / float64(topHits)).rgba()}
+	case topHits == 0 && botHits > 0:
+		return Cell{Ch: "▄", Fg: botSum.scale(1 / float64(botHits)).rgba()}
+	default:
+		top := topSum.scale(1 / float64(topHits)).rgba()
+		bot := botSum.scale(1 / float64(botHits)).rgba()
+		if top == bot {
+			return Cell{Ch: " ", Bg: top}
+		}
+		return Cell{Ch: "▀", Fg: top, Bg: bot}
+	}
+}
+
+// fitHalfAA downsamples a 2x4 sub-pixel block (2x2 per square pixel) into one
+// 1x2 half-block Cell with fractional edge coverage metadata for backdrop compositing.
+func fitHalfAA(px8 []rgb, hits8 [8]bool) Cell {
+	var topSum, botSum rgb
+	topHits, botHits := 0, 0
+	for i := range 4 {
+		topSum = topSum.add(px8[i])
+		if hits8[i] {
+			topHits++
+		}
+		botSum = botSum.add(px8[i+4])
+		if hits8[i+4] {
+			botHits++
+		}
+	}
+	if topHits == 0 && botHits == 0 {
+		return Cell{}
+	}
+	topCol := topSum.scale(0.25).rgba()
+	botCol := botSum.scale(0.25).rgba()
+	var cov uint8
+	if topHits < 4 || botHits < 4 {
+		cov = uint8(1 + topHits*5 + botHits)
+	}
+	if topCol == botCol {
+		return Cell{Ch: " ", Bg: topCol, Cov: cov}
+	}
+	return Cell{Ch: "▀", Fg: topCol, Bg: botCol, Cov: cov}
+}
+
 // fitCell picks the character and two colors that best reproduce a cell's
 // sub-pixels, given in row-major order.
 func fitCell(px []rgb, t Tier) Cell {
+	if t == Half && len(px) == 2 {
+		top, bot := px[0].rgba(), px[1].rgba()
+		if top == bot {
+			return Cell{Ch: " ", Bg: top}
+		}
+		return Cell{Ch: "▀", Fg: top, Bg: bot}
+	}
 	n := len(px)
 	full := uint8(1<<n - 1)
 	a, b, mask, gain := split2(px)

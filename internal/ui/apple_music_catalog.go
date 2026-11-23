@@ -229,7 +229,7 @@ func (p *AppleMusicPage) acceptCatalog(m appleCatalogMsg) {
 	}
 }
 
-// drawCatalogTabs renders Swiss-grid category tabs above the media crate.
+// drawCatalogTabs renders cozy stepped category pills above the media crate.
 func (p *AppleMusicPage) drawCatalogTabs(x, y, w int, kinds []string, keys []struct{ key, label string }, selected string) {
 	if p.screen.w < 60 || p.screen.h < 20 || w < 34 {
 		for i := range keys {
@@ -240,31 +240,42 @@ func (p *AppleMusicPage) drawCatalogTabs(x, y, w int, kinds []string, keys []str
 		p.drawKeys(x, y, w, keys)
 		return
 	}
+	padNeeded := 0
+	for i, k := range keys {
+		padNeeded += npWidth(k.label) + 4
+		if i > 0 {
+			padNeeded++
+		}
+	}
+	padded := padNeeded <= w
 	cx := x
 	for i, k := range keys {
 		active := selected == kinds[i]
-		body := " " + k.label + " "
-		tabW := npWidth(body) + 1
+		lw := npWidth(k.label)
+		tabW := lw + 2
+		if padded {
+			tabW = lw + 4
+		}
 		if cx+tabW > x+w {
 			break
 		}
 		hovered := p.hoverX >= cx && p.hoverX < cx+tabW && p.hoverY == y
+		capCol := appleNeon.Rule
+		tabBg := appleCozyCard
+		fg := appleNeon.Secondary
+		bold := false
 		if active {
-			p.screen.setRGBA(cx, y, "▐", 1, appleNeon.Hero, appleNeon.Surface, true, true, false)
-			tw := p.screen.textRGBA(cx+1, y, body, appleNeon.Text, color.RGBA{0x2b, 0x23, 0x35, 0xff}, true, true, true, tabW-1)
-			if cx+1+tw < x+w {
-				p.screen.setRGBA(cx+1+tw, y, "▌", 1, appleNeon.Accent2, color.RGBA{}, true, false, false)
-			}
-		} else {
-			tabBg := color.RGBA{0x18, 0x15, 0x20, 0xff}
-			fg := appleNeon.Secondary
-			if hovered {
-				fg = appleNeon.Hero
-				tabBg = appleNeon.Surface
-			}
-			p.screen.setRGBA(cx, y, "▎", 1, appleNeon.Rule, tabBg, true, true, false)
-			p.screen.textRGBA(cx+1, y, body, fg, tabBg, true, true, hovered, tabW-1)
+			capCol = appleNeon.Hero
+			tabBg = color.RGBA{0x2d, 0x23, 0x3d, 0xff}
+			fg = appleNeon.Text
+			bold = true
+		} else if hovered {
+			capCol = appleNeon.Accent2
+			tabBg = appleCozyPillHover
+			fg = appleNeon.Text
+			bold = true
 		}
+		drawCozyPill(&p.screen, cx, y, k.label, capCol, tabBg, appleNeon.Bg, fg, bold, padded, tabW)
 		p.addHit(appleHit{kind: appleHitKey, x: cx, y: y, w: tabW, h: 1, key: k.key})
 		cx += tabW + 1
 	}

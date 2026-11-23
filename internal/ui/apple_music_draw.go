@@ -15,45 +15,91 @@ import (
 )
 
 var appleNeon = npPalette{
-	Bg: color.RGBA{0x0e, 0x0f, 0x18, 0xff}, Surface: color.RGBA{0x1c, 0x19, 0x24, 0xff},
-	Text: color.RGBA{0xf4, 0xec, 0xde, 0xff}, Hero: color.RGBA{0xff, 0x6b, 0x4a, 0xff},
-	Secondary: color.RGBA{0xa6, 0x9a, 0x92, 0xff}, Rule: color.RGBA{0x40, 0x38, 0x4a, 0xff},
-	Ghost: color.RGBA{0x28, 0x24, 0x32, 0xff}, Accent: color.RGBA{0x2e, 0xd8, 0xc6, 0xff},
-	Accent2: color.RGBA{0xf5, 0xb9, 0x42, 0xff},
+	Bg:        color.RGBA{0x13, 0x10, 0x1b, 0xff},
+	Surface:   color.RGBA{0x1e, 0x19, 0x2b, 0xff},
+	Text:      color.RGBA{0xf5, 0xe8, 0xd6, 0xff},
+	Hero:      color.RGBA{0xfa, 0x6e, 0x52, 0xff},
+	Secondary: color.RGBA{0xa2, 0x96, 0xb0, 0xff},
+	Rule:      color.RGBA{0x38, 0x2e, 0x4a, 0xff},
+	Ghost:     color.RGBA{0x25, 0x1f, 0x33, 0xff},
+	Accent:    color.RGBA{0x6c, 0xc8, 0xb0, 0xff},
+	Accent2:   color.RGBA{0xf2, 0xb1, 0x3c, 0xff},
 }
+
+var (
+	appleCozyCard      = color.RGBA{0x18, 0x14, 0x23, 0xff}
+	appleCozyRaised    = color.RGBA{0x23, 0x1d, 0x31, 0xff}
+	appleCozyPill      = color.RGBA{0x27, 0x21, 0x35, 0xff}
+	appleCozyPillHover = color.RGBA{0x36, 0x2b, 0x45, 0xff}
+	appleCozyBracket   = color.RGBA{0x6d, 0x60, 0x82, 0xff}
+	appleCozyWoodHi    = color.RGBA{0xb5, 0x84, 0x5b, 0xff}
+	appleCozyWoodLo    = color.RGBA{0x6e, 0x4f, 0x39, 0xff}
+)
 
 func appleBox(x, y, w, h int) image.Rectangle { return image.Rect(x, y, x+max(w, 0), y+max(h, 0)) }
 
+// drawCozyPill renders a stepped half-block accent badge matching the cozy study-desk pill aesthetic.
+func drawCozyPill(s *npScreen, x, y int, label string, capCol, pillBg, outerBg, txtCol color.RGBA, bold, padded bool, maxW int) int {
+	if maxW <= 0 || label == "" {
+		return 0
+	}
+	lw := npWidth(label)
+	if padded && maxW >= lw+4 {
+		s.setRGBA(x, y, "▐", 1, capCol, outerBg, true, true, false)
+		s.setRGBA(x+1, y, " ", 1, txtCol, pillBg, true, true, bold)
+		n := s.textRGBA(x+2, y, label, txtCol, pillBg, true, true, bold, maxW-4)
+		s.setRGBA(x+2+n, y, " ", 1, txtCol, pillBg, true, true, bold)
+		s.setRGBA(x+3+n, y, "▌", 1, capCol, outerBg, true, true, false)
+		return n + 4
+	}
+	if maxW >= lw+2 {
+		s.setRGBA(x, y, "▐", 1, capCol, outerBg, true, true, false)
+		n := s.textRGBA(x+1, y, label, txtCol, pillBg, true, true, bold, maxW-2)
+		s.setRGBA(x+1+n, y, "▌", 1, capCol, outerBg, true, true, false)
+		return n + 2
+	}
+	return s.textRGBA(x, y, label, txtCol, pillBg, true, true, bold, maxW)
+}
+
 func (p *AppleMusicPage) drawSwissSection(r image.Rectangle, num, title, meta string) {
+	_ = num
 	if r.Dx() < 4 || r.Dy() < 1 {
 		return
 	}
 	s, pal := &p.screen, appleNeon
 	x, y, w := r.Min.X, r.Min.Y, r.Dx()
-	barBg := color.RGBA{0x24, 0x1e, 0x2b, 0xff}
-	tagBg := color.RGBA{0x32, 0x29, 0x3b, 0xff}
-	s.fillRGBA(x, y, w, 1, barBg)
+	s.fillRGBA(x, y, w, 1, pal.Bg)
 	n := 0
-	n += s.textRGBA(x, y, "▐", pal.Hero, barBg, true, true, false, w)
-	n += s.textRGBA(x+n, y, " "+num+" ", pal.Accent2, tagBg, true, true, true, max(0, w-n))
-	n += s.textRGBA(x+n, y, "▌ ", pal.Hero, barBg, true, true, false, max(0, w-n))
-	n += s.textRGBA(x+n, y, title, pal.Text, barBg, true, true, true, max(0, w-n))
+	tw := npWidth(title)
+	if w >= 22 && w >= tw+8 {
+		n += s.textRGBA(x, y, "╭ ", appleCozyBracket, pal.Bg, true, true, false, 2)
+		n += s.textRGBA(x+n, y, title, pal.Text, appleCozyRaised, true, true, true, max(0, w-n-2))
+		n += s.textRGBA(x+n, y, " ╮", appleCozyBracket, pal.Bg, true, true, false, max(0, w-n))
+	} else {
+		n += s.textRGBA(x, y, title, pal.Text, appleCozyRaised, true, true, true, w)
+	}
 	metaW := 0
 	if meta != "" {
-		tag := " " + meta + " "
-		mw := npWidth(tag) + 2
+		mw := npWidth(meta) + 4
+		padded := true
+		if x+n+2+mw > x+w {
+			mw = npWidth(meta) + 2
+			padded = false
+		}
 		if x+n+2+mw <= x+w {
 			metaW = mw
 			mx := x + w - mw
-			s.textRGBA(mx, y, "▐", pal.Rule, barBg, true, true, false, 1)
-			s.textRGBA(mx+1, y, tag, pal.Secondary, tagBg, true, true, false, mw-2)
-			s.textRGBA(x+w-1, y, "▌", pal.Rule, barBg, true, true, false, 1)
+			capCol := pal.Rule
+			if strings.Contains(meta, "i") || meta == "DETAIL" {
+				capCol = pal.Accent2
+			}
+			drawCozyPill(s, mx, y, meta, capCol, appleCozyPill, pal.Bg, pal.Secondary, false, padded, mw)
 		}
 	}
 	grooveStart := x + n + 1
 	grooveEnd := x + w - metaW - 1
 	if grooveEnd > grooveStart+1 {
-		s.repeatRGBA(grooveStart, y, grooveEnd-grooveStart, "─", pal.Rule, barBg, true, true, false)
+		s.repeatRGBA(grooveStart, y, grooveEnd-grooveStart, "─", pal.Rule, pal.Bg, true, true, false)
 	}
 }
 
@@ -156,30 +202,56 @@ func (p *AppleMusicPage) draw(w, h int, now time.Time, aspect float64) string {
 
 func (p *AppleMusicPage) drawHeader(w, h int) {
 	s, pal := &p.screen, appleNeon
-	fasciaBg := color.RGBA{0x26, 0x20, 0x2c, 0xff}
-	podBg := color.RGBA{0x17, 0x13, 0x1e, 0xff}
-	acctBg := color.RGBA{0x2f, 0x27, 0x38, 0xff}
+	fasciaBg := color.RGBA{0x1a, 0x15, 0x26, 0xff}
+	podBg := appleNeon.Bg
 	s.fillRGBA(0, 0, w, 1, fasciaBg)
+
+	account := T("account.sign_in")
+	acctCap := pal.Accent2
+	if p.state.Authorized {
+		account = T("account.signed_in")
+		acctCap = pal.Accent
+	}
+	if !p.state.Ready {
+		account = T("account.connecting")
+		acctCap = pal.Accent2
+	}
+	if p.loggingOut {
+		account = T("account.clearing")
+		acctCap = pal.Hero
+	}
+
+	acctMax := min(w, npWidth(account)+4)
+	acctPadded := true
+	if w < 72 || acctMax > 25 {
+		acctMax = min(w, 21)
+		acctPadded = false
+	}
+	ax := max(0, w-acctMax-2)
+	if w < 72 {
+		ax = max(0, w-23)
+		acctMax = min(w-ax, 21)
+	}
+
 	x := 1
 	if w >= 72 {
-		x += s.textRGBA(x, 0, "◉ ", pal.Secondary, fasciaBg, true, true, false, w-x)
-		x += s.textRGBA(x, 0, "▐", pal.Accent2, fasciaBg, true, true, false, w-x)
-		x += s.textRGBA(x, 0, " T A P E F O X ", pal.Text, podBg, true, true, true, max(0, w-x-26))
-		x += s.textRGBA(x, 0, "▌ ", pal.Accent2, fasciaBg, true, true, false, max(0, w-x-26))
-		s.textRGBA(x, 0, "Apple Music · Cassette Deck", pal.Secondary, fasciaBg, true, true, false, max(0, w-x-26))
+		x += drawCozyPill(s, x, 0, "♪ tapefox", pal.Hero, appleCozyPill, fasciaBg, pal.Text, true, true, max(0, ax-x-2))
+		x += s.textRGBA(x, 0, "  Apple Music · Cassette Deck", pal.Secondary, fasciaBg, true, true, false, max(0, ax-x-2))
 	} else {
-		s.textRGBA(1, 0, "Apple Music · Cassette Deck", pal.Text, fasciaBg, true, true, false, max(0, w-28))
+		s.textRGBA(1, 0, "Apple Music · Cassette Deck", pal.Text, fasciaBg, true, true, false, max(0, ax-2))
 	}
+
 	if w >= 98 {
 		playLit := p.ready() && p.state.Playing
 		vuLit := p.meter != nil && p.meter.Frame().Ready
 		lrcLit := len(p.lyrics.data.Lines) > 0
-		lx := w - 42
+		lampsW := 20
 		jewel := false
 		if w >= 108 {
-			lx = w - 53
+			lampsW = 27
 			jewel = true
 		}
+		lx := max(x+2, ax-lampsW-2)
 		for _, lamp := range []struct {
 			label string
 			lit   bool
@@ -199,26 +271,12 @@ func (p *AppleMusicPage) drawHeader(w, h int) {
 				text = " " + dot + lamp.label + " "
 				bg = podBg
 			}
-			lx += s.textRGBA(lx, 0, text, fg, bg, true, true, true, max(0, w-lx)) + 1
+			lx += s.textRGBA(lx, 0, text, fg, bg, true, true, true, max(0, ax-lx-1)) + 1
 		}
 	}
-	account := T("account.sign_in")
-	if p.state.Authorized {
-		account = T("account.signed_in")
-	}
-	if !p.state.Ready {
-		account = T("account.connecting")
-	}
-	if p.loggingOut {
-		account = T("account.clearing")
-	}
-	ax := max(0, w-23)
-	aw := min(w, 21)
-	s.textRGBA(ax, 0, " "+account+" ", pal.Accent, acctBg, true, true, true, aw)
-	if w >= 80 && w-1 >= ax+aw {
-		s.textRGBA(w-2, 0, "◉", pal.Secondary, fasciaBg, true, true, false, 1)
-	}
-	p.addHit(appleHit{kind: appleHitKey, x: ax, y: 0, w: aw, h: 1, key: "b"})
+
+	drawnAcct := drawCozyPill(s, ax, 0, account, acctCap, appleCozyPill, fasciaBg, pal.Text, true, acctPadded, acctMax)
+	p.addHit(appleHit{kind: appleHitKey, x: ax, y: 0, w: max(1, drawnAcct), h: 1, key: "b"})
 	if h >= 10 {
 		p.drawNavigation(w)
 		p.drawNavigationContext(w)
@@ -226,24 +284,21 @@ func (p *AppleMusicPage) drawHeader(w, h int) {
 }
 
 func (p *AppleMusicPage) drawNavigation(w int) {
-	railBg := color.RGBA{0x1b, 0x18, 0x24, 0xff}
-	switchBg := color.RGBA{0x33, 0x29, 0x3b, 0xff}
+	railBg := color.RGBA{0x16, 0x12, 0x20, 0xff}
+	switchBg := color.RGBA{0x2c, 0x22, 0x3c, 0xff}
 	p.screen.fillRGBA(0, 1, w, 1, railBg)
 	scene, target := T("scene.browse"), T("nav.listen")
 	if p.scene == appleListen {
 		scene, target = T("scene.listen"), T("nav.browse")
 	}
 	x := 2
-	x += p.screen.textRGBA(x, 1, "▐", appleNeon.Hero, railBg, true, true, false, max(0, w-x-2))
-	x += p.screen.textRGBA(x, 1, " ▸ "+scene+" ", appleNeon.Text, switchBg, true, true, true, max(0, w-x-2))
-	x += p.screen.textRGBA(x, 1, "▌ ", appleNeon.Hero, railBg, true, true, false, max(0, w-x-2))
-	p.drawKeys(x, 1, w-x-2, []struct{ key, label string }{{"i", target}})
-	x += npWidth(target) + 2
-	x += p.screen.textRGBA(x, 1, "┃ ", appleNeon.Rule, railBg, true, true, false, max(0, w-x-2))
-	p.drawKeys(x, 1, w-x-2, []struct{ key, label string }{
+	x += drawCozyPill(&p.screen, x, 1, "▸ "+scene, appleNeon.Hero, switchBg, railBg, appleNeon.Text, true, true, max(0, w-x-2))
+	x += 2
+	x += p.drawKeys(x, 1, max(0, w-x-2), []struct{ key, label string }{{"i", target}})
+	x += p.screen.textRGBA(x, 1, "│ ", appleNeon.Rule, railBg, true, true, false, max(0, w-x-2))
+	p.drawKeys(x, 1, max(0, w-x-2), []struct{ key, label string }{
 		{"1", T("nav.search")}, {"2", T("nav.library")}, {"3", T("nav.queue")}, {"s", T("nav.settings")},
 	})
-	p.screen.tintBg(0, 1, w, 1, railBg)
 }
 
 func (p *AppleMusicPage) navigationBackLabel() string {
@@ -293,8 +348,7 @@ func (p *AppleMusicPage) navigationPath() string {
 }
 
 func (p *AppleMusicPage) drawNavigationContext(w int) {
-	vfdStrip := color.RGBA{0x14, 0x13, 0x1d, 0xff}
-	escBg := color.RGBA{0x22, 0x1e, 0x2d, 0xff}
+	vfdStrip := color.RGBA{0x14, 0x11, 0x1d, 0xff}
 	p.screen.fillRGBA(0, 2, w, 1, vfdStrip)
 	label := p.navigationPath()
 	if p.editing {
@@ -316,10 +370,23 @@ func (p *AppleMusicPage) drawNavigationContext(w int) {
 	if backW > 0 {
 		available = max(0, available-backW-2)
 	}
-	p.screen.textRGBA(labelX, 2, label, appleNeon.Secondary, vfdStrip, true, true, false, available)
+	drawnW := p.screen.textRGBA(labelX, 2, label, appleNeon.Secondary, vfdStrip, true, true, false, available)
 	if backW > 0 {
 		x := w - 2 - backW
-		p.screen.textRGBA(x, 2, back, appleNeon.Accent, escBg, true, true, false, backW)
+		switch {
+		case w >= 100 && x-3 >= labelX+drawnW && x+backW+1 < w:
+			p.screen.setRGBA(x-2, 2, "▐", 1, appleNeon.Accent2, vfdStrip, true, true, false)
+			p.screen.setRGBA(x-1, 2, " ", 1, appleNeon.Text, appleCozyPill, true, true, false)
+			p.screen.textRGBA(x, 2, back, appleNeon.Text, appleCozyPill, true, true, false, backW)
+			p.screen.setRGBA(x+backW, 2, " ", 1, appleNeon.Text, appleCozyPill, true, true, false)
+			p.screen.setRGBA(x+backW+1, 2, "▌", 1, appleNeon.Accent2, vfdStrip, true, true, false)
+		case w >= 72 && x-2 >= labelX+drawnW && x+backW < w:
+			p.screen.setRGBA(x-1, 2, "▐", 1, appleNeon.Accent2, vfdStrip, true, true, false)
+			p.screen.textRGBA(x, 2, back, appleNeon.Text, appleCozyPill, true, true, false, backW)
+			p.screen.setRGBA(x+backW, 2, "▌", 1, appleNeon.Accent2, vfdStrip, true, true, false)
+		default:
+			p.screen.textRGBA(x, 2, back, appleNeon.Accent2, appleCozyPill, true, true, false, backW)
+		}
 		p.addHit(appleHit{kind: appleHitKey, key: "esc", x: x, y: 2, w: backW, h: 1})
 	}
 }
@@ -332,21 +399,32 @@ func (p *AppleMusicPage) drawBrowse(r image.Rectangle, now time.Time) {
 	s := &p.screen
 	cw := max(0, r.Dx()-2)
 	cx := r.Min.X + 1
-	cardBg := color.RGBA{0x23, 0x1d, 0x2a, 0xff}
-	p.drawSwissSection(appleBox(cx, r.Min.Y, cw, 1), "00", "N O W   P L A Y I N G · J-CARD", "i")
+	cardBg := appleCozyCard
+	p.drawSwissSection(appleBox(cx, r.Min.Y, cw, 1), "00", "Now Playing", "i")
 	s.fillRGBA(cx, r.Min.Y+1, cw, 2, cardBg)
 	name := p.state.Track.Name
 	if name == "" {
 		name = T("status.idle")
 	}
 	flag := "‖ "
+	flagCol := appleNeon.Accent2
+	titleCol := appleNeon.Text
 	if p.ready() && p.state.Playing {
 		flag = "▶ "
+		flagCol = appleNeon.Hero
+		titleCol = appleNeon.Hero
 	}
-	// Dual-stripe TDK/Maxell J-card spine along left card edge.
+	// Dual-stripe coral/amber J-card spine along left card edge + muted plum right border.
 	s.textRGBA(cx, r.Min.Y+1, "▐", appleNeon.Hero, cardBg, true, true, false, 1)
 	s.textRGBA(cx, r.Min.Y+2, "▐", appleNeon.Accent2, cardBg, true, true, false, 1)
-	s.textRGBA(cx+2, r.Min.Y+1, flag+name, appleNeon.Hero, cardBg, true, true, true, max(0, cw-3))
+	if cw > 2 {
+		s.textRGBA(cx+cw-1, r.Min.Y+1, "▌", appleNeon.Rule, cardBg, true, true, false, 1)
+		s.textRGBA(cx+cw-1, r.Min.Y+2, "▌", appleNeon.Rule, cardBg, true, true, false, 1)
+	}
+	if cw >= 5 {
+		s.textRGBA(cx+2, r.Min.Y+1, flag, flagCol, cardBg, true, true, true, 2)
+		s.textRGBA(cx+4, r.Min.Y+1, name, titleCol, cardBg, true, true, true, max(0, cw-6))
+	}
 	sub := p.state.Track.Artist
 	if p.state.Track.Album != "" {
 		if sub != "" {
@@ -355,17 +433,17 @@ func (p *AppleMusicPage) drawBrowse(r image.Rectangle, now time.Time) {
 			sub = p.state.Track.Album
 		}
 	}
-	metaW := max(0, cw-3)
+	metaW := max(0, cw-4)
 	if cw >= 28 {
-		side := "SIDE A"
+		side := "♪ SIDE A"
 		sw := npWidth(side)
 		if sw+8 <= cw {
-			s.textRGBA(cx+cw-sw-1, r.Min.Y+2, side, appleNeon.Rule, cardBg, true, true, false, sw)
-			metaW = max(0, cw-sw-5)
+			s.textRGBA(cx+cw-sw-2, r.Min.Y+2, side, appleNeon.Accent2, cardBg, true, true, false, sw)
+			metaW = max(0, cw-sw-6)
 		}
 	}
 	s.textRGBA(cx+2, r.Min.Y+2, sub, appleNeon.Secondary, cardBg, true, true, false, metaW)
-	s.repeatRGBA(cx, r.Min.Y+3, cw, "▀", cardBg, appleNeon.Bg, true, true, false)
+	s.repeatRGBA(cx, r.Min.Y+3, cw, "▀", appleCozyWoodLo, appleNeon.Bg, true, true, false)
 	p.addHit(appleHit{kind: appleHitKey, x: r.Min.X, y: r.Min.Y, w: r.Dx(), h: 4, key: "i"})
 	r.Min.Y += 5
 	p.drawDrawer(r, now)
@@ -438,7 +516,7 @@ func (p *AppleMusicPage) drawListening(r image.Rectangle, reveal float64) {
 	if reveal < 1 {
 		boxW = max(4, min(r.Dx(), int(math.Round(float64(r.Dx())*(.35+.65*reveal)))))
 	}
-	p.drawSwissSection(appleBox(r.Min.X+1, r.Min.Y, max(0, boxW-2), 1), "02", "T R A C K  ·  LISTENING", "DETAIL")
+	p.drawSwissSection(appleBox(r.Min.X+1, r.Min.Y, max(0, boxW-2), 1), "02", "Track · Listening", "DETAIL")
 	x, y, w := r.Min.X+1, r.Min.Y+2, max(0, boxW-2)
 	if w <= 0 {
 		return
@@ -449,16 +527,19 @@ func (p *AppleMusicPage) drawListening(r image.Rectangle, reveal float64) {
 		}
 		return min(max((reveal-start)/span, 0), 1)
 	}
-	cardBg := color.RGBA{0x23, 0x1d, 0x2a, 0xff}
+	cardBg := appleCozyCard
 	if w >= 6 && y+1 < r.Max.Y {
 		s.fillRGBA(x, y, w, 2, cardBg)
 		s.textRGBA(x, y, "▐", npLerpRGBA(pal.Bg, pal.Hero, stage(0, .55)), cardBg, true, true, false, 1)
 		s.textRGBA(x, y+1, "▐", npLerpRGBA(pal.Bg, pal.Accent2, stage(.1, .55)), cardBg, true, true, false, 1)
+		s.textRGBA(x+w-1, y, "▌", npLerpRGBA(pal.Bg, pal.Rule, stage(0, .55)), cardBg, true, true, false, 1)
+		s.textRGBA(x+w-1, y+1, "▌", npLerpRGBA(pal.Bg, pal.Rule, stage(.1, .55)), cardBg, true, true, false, 1)
 	}
 	fg := npLerpRGBA(pal.Bg, pal.Hero, stage(0, .55))
 	name := p.state.Track.Name
 	if name == "" {
 		name = T("status.idle")
+		fg = npLerpRGBA(pal.Bg, pal.Text, stage(0, .55))
 	}
 	flag := "‖ "
 	if p.ready() && p.state.Playing {
@@ -470,15 +551,15 @@ func (p *AppleMusicPage) drawListening(r image.Rectangle, reveal float64) {
 		if st := p.bayStyle; st >= 1 && int(st) <= len(deck.CassetteStyles) {
 			model = deck.CassetteStyles[st-1].Name
 		}
-		badge = "SIDE A · " + model
+		badge = "♪ SIDE A · " + model
 	}
 	tx := x + 2
-	tw := max(0, w-2)
+	tw := max(0, w-4)
 	titleMax := tw
 	if badge != "" {
 		bw := npWidth(badge)
 		if bw+14 <= tw {
-			s.textRGBA(x+w-bw-1, y, badge, npLerpRGBA(pal.Bg, pal.Accent2, stage(.1, .5)), cardBg, true, true, false, bw)
+			s.textRGBA(x+w-bw-2, y, badge, npLerpRGBA(pal.Bg, pal.Accent2, stage(.1, .5)), cardBg, true, true, false, bw)
 			titleMax = max(0, tw-bw-3)
 		}
 	}
@@ -492,7 +573,7 @@ func (p *AppleMusicPage) drawListening(r image.Rectangle, reveal float64) {
 				meta = p.state.Track.Album
 			}
 		}
-		s.textRGBA(tx, y+1, meta, npLerpRGBA(pal.Bg, pal.Secondary, u), cardBg, true, true, false, max(0, w-3))
+		s.textRGBA(tx, y+1, meta, npLerpRGBA(pal.Bg, pal.Secondary, u), cardBg, true, true, false, max(0, w-4))
 	}
 	if u := stage(.3, .55); u > 0 && y+3 < r.Max.Y-1 {
 		if r.Dy() >= 10 {
@@ -514,7 +595,7 @@ func (p *AppleMusicPage) drawDevice(r image.Rectangle, now time.Time, aspect flo
 	if st := p.mechanics(now).Style; st >= 1 && int(st) <= len(deck.CassetteStyles) {
 		modelTag = deck.CassetteStyles[st-1].Model + " · SIDE A"
 	}
-	p.drawSwissSection(appleBox(r.Min.X+1, r.Min.Y, r.Dx()-2, 1), secNum, "D E C K  ·  Cassette Deck", modelTag)
+	p.drawSwissSection(appleBox(r.Min.X+1, r.Min.Y, r.Dx()-2, 1), secNum, "Cassette Deck", modelTag)
 	stage, meters := appleDeviceStage(r)
 	p.stageRect = stage
 	p.drawMartinaiseStage(stage.Min.X, stage.Min.Y, stage.Dx(), stage.Dy(), now)
@@ -556,7 +637,7 @@ func (p *AppleMusicPage) drawDevice(r image.Rectangle, now time.Time, aspect flo
 	p.glitch(stage.Min.X, stage.Min.Y, stage.Dx(), stage.Dy(), now)
 	if meters {
 		y := stage.Max.Y + 1
-		podBg := color.RGBA{0x15, 0x14, 0x20, 0xff}
+		podBg := appleCozyCard
 		p.screen.fillRGBA(stage.Min.X, y, stage.Dx(), 5, podBg)
 		p.screen.textRGBA(stage.Min.X+1, y, "TIME COUNTER", appleNeon.Secondary, podBg, true, true, false, 22)
 		counterTime, counterState := now, &p.counter
@@ -570,7 +651,7 @@ func (p *AppleMusicPage) drawDevice(r image.Rectangle, now time.Time, aspect flo
 		p.drawMeter(stage.Min.X+25, y, stage.Dx()-26, p.meter.Frame())
 		p.screen.tintBg(stage.Min.X, y, stage.Dx(), 5, podBg)
 		if y+5 < r.Max.Y {
-			p.screen.repeatRGBA(stage.Min.X, y+5, stage.Dx(), "▀", podBg, appleNeon.Bg, true, true, false)
+			p.screen.repeatRGBA(stage.Min.X, y+5, stage.Dx(), "▀", appleCozyWoodLo, appleNeon.Bg, true, true, false)
 		}
 	}
 }
@@ -633,8 +714,8 @@ func (p *AppleMusicPage) deviceFrame(stage image.Rectangle, now time.Time, aspec
 
 func (p *AppleMusicPage) drawFooter(now time.Time) {
 	s, w, h := &p.screen, p.screen.w, p.screen.h
-	consoleBg := color.RGBA{0x1b, 0x18, 0x25, 0xff}
-	statusBg := color.RGBA{0x13, 0x11, 0x1b, 0xff}
+	consoleBg := color.RGBA{0x1a, 0x15, 0x26, 0xff}
+	statusBg := color.RGBA{0x11, 0x0e, 0x18, 0xff}
 	if h < 3 {
 		if h > 1 {
 			s.fillRGBA(0, h-1, w, 1, consoleBg)
@@ -652,7 +733,7 @@ func (p *AppleMusicPage) drawFooter(now time.Time) {
 		if p.pending {
 			s.textRGBA(24, h-5, T("status.loading"), appleNeon.Accent2, consoleBg, true, true, false, max(0, w-40))
 		} else if p.playbackError != "" {
-			s.textRGBA(24, h-5, T("status.play_failed"), appleNeon.Accent2, consoleBg, true, true, false, max(0, w-40))
+			s.textRGBA(24, h-5, T("status.play_failed"), appleNeon.Hero, consoleBg, true, true, false, max(0, w-40))
 		}
 		if w >= 86 {
 			mode := "STANDBY · CrO₂"
@@ -668,7 +749,7 @@ func (p *AppleMusicPage) drawFooter(now time.Time) {
 			}
 		}
 		x, y, width := 2, h-4, w-4
-		troughBg := color.RGBA{0x14, 0x12, 0x1d, 0xff}
+		troughBg := appleNeon.Bg
 		if width >= 4 {
 			s.setRGBA(x, y, "▕", 1, appleNeon.Rule, consoleBg, true, true, false)
 			s.setRGBA(x+width-1, y, "▏", 1, appleNeon.Rule, consoleBg, true, true, false)
@@ -691,14 +772,13 @@ func (p *AppleMusicPage) drawFooter(now time.Time) {
 		s.fillRGBA(0, h-min(h, 3), w, min(h, 3), consoleBg)
 	}
 	p.drawTransport(1, h-3, w-2)
-	s.tintBg(0, h-3, w, 1, consoleBg)
 	if h >= 4 {
 		back := p.navigationBackLabel()
 		backW := min(npWidth(back), max(0, w-2)/2)
 		keysW := w - 2
 		if backW > 0 {
 			keysW = max(0, keysW-backW-2)
-			p.screen.textRGBA(w-1-backW, h-2, back, appleNeon.Accent, color.RGBA{0x22, 0x1e, 0x2d, 0xff}, true, true, false, backW)
+			s.textRGBA(w-1-backW, h-2, back, appleNeon.Accent2, appleCozyPill, true, true, false, backW)
 			p.addHit(appleHit{kind: appleHitKey, key: "esc", x: w - 1 - backW, y: h - 2, w: backW, h: 1})
 		}
 		p.drawKeys(1, h-2, keysW, []struct{ key, label string }{
@@ -710,7 +790,6 @@ func (p *AppleMusicPage) drawFooter(now time.Time) {
 			{"o", T("bar.controls")},
 			{"q", T("bar.quit")},
 		})
-		s.tintBg(0, h-2, w, 1, consoleBg)
 	}
 	s.fillRGBA(0, h-1, w, 1, statusBg)
 	s.textRGBA(1, h-1, "▸ ", appleNeon.Accent2, statusBg, true, true, false, max(0, w-2))
@@ -726,14 +805,16 @@ func (p *AppleMusicPage) drawTransport(x, y, w int) {
 	if p.state.Playing {
 		label = "SPC ‖"
 	}
-	p.drawKeys(x, y, w, []struct{ key, label string }{{"p", "p ◀◀"}, {"space", label}, {"n", "n ▶▶"}, {"-", "−"}, {"+", "+"}})
-	if w >= 45 {
-		x += 33
-		p.screen.text(x, y, fmt.Sprintf("VOL %02d", int(p.state.Volume*100)), uv.Style{Fg: appleNeon.Accent2}, 7)
-		width := min(12, w-42)
+	consoleBg := color.RGBA{0x1a, 0x15, 0x26, 0xff}
+	used := p.drawKeys(x, y, w, []struct{ key, label string }{{"p", "p ◀◀"}, {"space", label}, {"n", "n ▶▶"}, {"-", "−"}, {"+", "+"}})
+	rem := w - used - 1
+	if rem >= 12 {
+		vx := x + used + 1
+		p.screen.textRGBA(vx, y, fmt.Sprintf("VOL %02d", int(p.state.Volume*100)), appleNeon.Accent2, consoleBg, true, true, true, 7)
+		width := min(12, rem-8)
 		if width > 1 {
-			drawSubpixelSlider(&p.screen, x+8, y, width, p.state.Volume, appleNeon.Accent, appleNeon.Hero, appleNeon.Rule)
-			p.addHit(appleHit{kind: appleHitVolume, x: x + 8, y: y, w: width, h: 1})
+			drawSubpixelSlider(&p.screen, vx+8, y, width, p.state.Volume, appleNeon.Accent, appleNeon.Hero, appleNeon.Rule)
+			p.addHit(appleHit{kind: appleHitVolume, x: vx + 8, y: y, w: width, h: 1})
 		}
 	}
 }
@@ -767,13 +848,13 @@ func (p *AppleMusicPage) drawPanel() {
 	}
 	w, fullH := min(p.screen.w-4, 66), min(p.screen.h-4, 16)
 	if w < 12 || fullH < 3 {
-		p.screen.fill(0, 0, p.screen.w, p.screen.h, appleNeon.Surface)
+		p.screen.fillRGBA(0, 0, p.screen.w, p.screen.h, appleCozyCard)
 		p.screen.text(0, 0, T("panel.shortcuts")+" · "+T("panel.esc_close"), uv.Style{Fg: appleNeon.Accent2}, p.screen.w)
 		return
 	}
 	for sy := range p.screen.h {
 		for sx := range p.screen.w {
-			p.screen.shade(sx, sy, .42)
+			p.screen.shade(sx, sy, .46)
 		}
 	}
 	open := 1.0
@@ -782,7 +863,7 @@ func (p *AppleMusicPage) drawPanel() {
 	}
 	h := max(3, int(math.Round(float64(fullH)*open)))
 	x, y := (p.screen.w-w)/2, (p.screen.h-h)/2
-	p.screen.fill(x, y, w, h, appleNeon.Surface)
+	p.screen.fillRGBA(x, y, w, h, appleCozyCard)
 	appleBezel(&p.screen, x, y, w, h, p.panel)
 
 	langLabel := "English [en]"
@@ -826,9 +907,9 @@ func (p *AppleMusicPage) drawPanel() {
 }
 
 func (p *AppleMusicPage) drawStandby(x, y, w, h int, now time.Time) {
-	strength := .55
+	strength := .60
 	if p.level != motion.Off {
-		strength = .4 + .35*(1+math.Sin(float64(now.UnixMilli())/1600))/2
+		strength = .45 + .35*(1+math.Sin(float64(now.UnixMilli())/1600))/2
 	}
 	label := "● STANDBY"
 	if p.pending {
@@ -840,29 +921,34 @@ func (p *AppleMusicPage) drawStandby(x, y, w, h int, now time.Time) {
 	} else if p.state.Paused {
 		label = "‖ PAUSED"
 	}
-	p.screen.text(x+1, y+h-1, label, uv.Style{Fg: npLerp(appleNeon.Rule, appleNeon.Accent, strength)}, w-2)
+	col := npLerpRGBA(appleNeon.Secondary, appleNeon.Accent2, strength)
+	p.screen.textRGBA(x+1, y+h-1, label, col, appleNeon.Bg, true, false, true, max(0, w-2))
 }
 
-// The bloom is decorative light behind the housing, never an audio signal.
+// The bloom is decorative light behind the housing, synced to the 4.2s desk lamp rhythm, never an audio signal.
 func (p *AppleMusicPage) drawStandbyGlow(stage image.Rectangle, frame *deck.Frame, offsetX, offsetY int, now time.Time) {
 	if p.level == motion.Off || p.state.Playing || p.pending || p.inserting || !p.swapStart.IsZero() {
 		return
 	}
-	phase := float64(now.UnixMilli()%4000) / 4000
-	strength := .045 + .055*(.5-.5*math.Cos(2*math.Pi*phase))
+	phase := p.emptyMotionPhase(now)
+	perkUp := !stage.Empty() && p.hoverX >= stage.Min.X && p.hoverX < stage.Max.X && p.hoverY >= stage.Min.Y && p.hoverY < stage.Max.Y
+	strength := .13 + .11*(.5+.5*math.Sin(phase))
+	if perkUp {
+		strength = .30
+	}
 	if p.level == motion.Subtle {
-		strength *= .6
+		strength *= .55
 	}
 	aspect := p.cellAspect
 	if aspect <= 0 {
 		aspect = 2
 	}
-	var kernel [5][9]float64
-	for dy := -2; dy <= 2; dy++ {
-		for dx := -4; dx <= 4; dx++ {
+	var kernel [7][11]float64
+	for dy := -3; dy <= 3; dy++ {
+		for dx := -5; dx <= 5; dx++ {
 			dist := float64(dx*dx) + float64(dy*dy)*aspect*aspect
-			if dist <= 16 {
-				kernel[dy+2][dx+4] = math.Exp(-dist / 6)
+			if dist <= 25 {
+				kernel[dy+3][dx+5] = math.Exp(-dist / 8.5)
 			}
 		}
 	}
@@ -879,14 +965,14 @@ func (p *AppleMusicPage) drawStandbyGlow(stage image.Rectangle, frame *deck.Fram
 			if !occupied(x, y) {
 				continue
 			}
-			for dy := -2; dy <= 2; dy++ {
+			for dy := -3; dy <= 3; dy++ {
 				yy := y + dy
 				if yy < stage.Min.Y || yy >= stage.Max.Y {
 					continue
 				}
 				rowOff := (yy - stage.Min.Y) * width
-				for dx := -4; dx <= 4; dx++ {
-					k := kernel[dy+2][dx+4]
+				for dx := -5; dx <= 5; dx++ {
+					k := kernel[dy+3][dx+5]
 					if k == 0 {
 						continue
 					}
@@ -902,7 +988,7 @@ func (p *AppleMusicPage) drawStandbyGlow(stage image.Rectangle, frame *deck.Fram
 			}
 		}
 	}
-	halo := appleNeon.Accent2
+	halo := color.RGBA{0xff, 0xb8, 0x5c, 0xff}
 	for y := stage.Min.Y; y < stage.Max.Y; y++ {
 		rowOff := (y - stage.Min.Y) * width
 		for x := stage.Min.X; x < stage.Max.X; x++ {
@@ -945,22 +1031,28 @@ func (p *AppleMusicPage) drawSearchEditor(r image.Rectangle) {
 
 func (p *AppleMusicPage) drawInput(x, y, w int) {
 	s := &p.screen
-	btnLabel := " " + T("input.btn_search") + " "
+	btnText := T("input.btn_search")
+	btnLabel := " " + btnText + " "
 	btnW := npWidth(btnLabel)
-	hasBtn := w >= btnW+10
+	capBtnW := btnW + 2
+	hasCapBtn := w >= capBtnW+10
+	hasBtn := hasCapBtn || w >= btnW+10
 	inputW := w
-	if hasBtn {
+	if hasCapBtn {
+		inputW = w - capBtnW - 1
+	} else if hasBtn {
 		inputW = w - btnW - 1
 	}
 	value := T("input.prompt")
 	if p.input.Value() != "" {
 		value = "/ " + p.input.Value()
 	}
-	vfdBg := npLerpRGBA(s.pal.Bg, s.pal.Surface, .72)
+	vfdBg := color.RGBA{0x1c, 0x17, 0x29, 0xff}
 	fg := s.pal.Secondary
 	bevel := s.pal.Rule
 	if p.editing {
-		fg = s.pal.Accent
+		vfdBg = appleCozyRaised
+		fg = s.pal.Text
 		bevel = s.pal.Hero
 		runes := []rune(p.input.Value())
 		pos := min(p.input.Position(), len(runes))
@@ -972,18 +1064,30 @@ func (p *AppleMusicPage) drawInput(x, y, w int) {
 		value = "/ " + left + "▏" + string(runes[pos:])
 	}
 	if p.searching {
+		fg = s.pal.Accent2
 		value = T("input.searching")
 	}
-	s.fillRGBA(x, y, w, 1, vfdBg)
+	s.fillRGBA(x, y, w, 1, s.pal.Bg)
+	s.fillRGBA(x, y, inputW, 1, vfdBg)
 	if inputW >= 2 {
-		s.setRGBA(x, y, "▕", 1, bevel, vfdBg, true, true, false)
+		s.setRGBA(x, y, "▐", 1, bevel, s.pal.Bg, true, true, false)
 		s.textRGBA(x+1, y, value, fg, vfdBg, true, true, p.editing, inputW-1)
 	} else {
 		s.textRGBA(x, y, value, fg, vfdBg, true, true, p.editing, inputW)
 	}
 	p.addHit(appleHit{kind: appleHitKey, x: x, y: y, w: inputW, h: 1, key: "/"})
-	if hasBtn {
-		s.textRGBA(x+w-btnW, y, btnLabel, s.pal.Accent, s.pal.Surface, true, true, false, btnW)
+	if hasCapBtn {
+		bx := x + w - capBtnW
+		capCol := s.pal.Accent2
+		pillBg := appleCozyPill
+		if p.hoverY == y && p.hoverX >= bx && p.hoverX < bx+capBtnW {
+			capCol = s.pal.Hero
+			pillBg = appleCozyPillHover
+		}
+		drawCozyPill(s, bx, y, btnText, capCol, pillBg, s.pal.Bg, s.pal.Text, true, true, capBtnW)
+		p.addHit(appleHit{kind: appleHitKey, x: bx, y: y, w: capBtnW, h: 1, key: "search"})
+	} else if hasBtn {
+		s.textRGBA(x+w-btnW, y, btnLabel, s.pal.Accent2, appleCozyPill, true, true, true, btnW)
 		p.addHit(appleHit{kind: appleHitKey, x: x + w - btnW, y: y, w: btnW, h: 1, key: "search"})
 	}
 }

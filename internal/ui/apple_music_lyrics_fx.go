@@ -10,8 +10,8 @@ import (
 	"github.com/go-musicfox/go-musicfox/internal/applemusic"
 )
 
-// appleLyricLight is the warm vinyl-room parchment tint for unplayed lyric text.
-var appleLyricLight = color.RGBA{0xc8, 0xbc, 0xb0, 0xff}
+// appleLyricLight is the soft oat-cream tint for unplayed lyric text.
+var appleLyricLight = color.RGBA{0xe4, 0xd8, 0xc8, 0xff}
 
 var appleParticleRunes = [4]string{"✦", "✧", "⋆", "·"}
 
@@ -29,9 +29,9 @@ func (p *AppleMusicPage) drawLyricActiveRow(x, y, w int, row appleLyricRow, posi
 		textX, textW = x+1, w-1
 	}
 	baseBg := npLerp(appleNeon.Bg, appleNeon.Surface, .62*reveal)
-	glowBg := npLerp(appleNeon.Bg, color.RGBA{0x38, 0x20, 0x1d, 0xff}, .85*reveal)
+	glowBg := npLerp(appleNeon.Bg, color.RGBA{0x36, 0x21, 0x28, 0xff}, .85*reveal)
 	if w >= 12 {
-		p.screen.set(railX, y, "┃", 1, uv.Style{Fg: npLerp(appleNeon.Bg, appleNeon.Accent, reveal), Bg: glowBg, Attrs: uv.AttrBold})
+		p.screen.set(railX, y, "┃", 1, uv.Style{Fg: npLerp(appleNeon.Bg, appleNeon.Accent2, reveal), Bg: glowBg, Attrs: uv.AttrBold})
 	}
 	if textW <= 0 {
 		return

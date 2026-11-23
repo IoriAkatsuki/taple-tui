@@ -146,7 +146,7 @@ func NewAppleMusicPage(client appleMusicClient) *AppleMusicPage {
 	input.CharLimit = 128
 	input.Placeholder = "搜索歌曲 / 专辑 / 歌手"
 	return &AppleMusicPage{client: client, ctx: ctx, cancel: cancel, input: input,
-		hoverX: -1, hoverY: -1, pendingIndex: -1, status: "正在后台恢复会话；需要登录时按 b",
+		tier: deck.Half, hoverX: -1, hoverY: -1, pendingIndex: -1, status: "正在后台恢复会话；需要登录时按 b",
 		styleRNG: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())), styles: make(map[string]uint8),
 		searchKind: applemusic.CatalogSongs, libraryKind: applemusic.LibraryPlaylists,
 		rackPickup:  appleRackPickup{current: appleRackChoice{index: -1}, wanted: appleRackChoice{index: -1}},
@@ -160,7 +160,7 @@ func (p *AppleMusicPage) IgnoreQuitKeyMsg(msg tea.KeyMsg) bool {
 }
 func (p *AppleMusicPage) Close() error { p.cancel(); p.meter.Close(); p.closeRenderer(); return nil }
 func (p *AppleMusicPage) Init(a *model.App) tea.Cmd {
-	p.level, p.tier = a.MotionLevel(), deckTier(a)
+	p.level, p.tier = a.MotionLevel(), applePageTier(a)
 	p.renderBackend = "CPU · 正在检测 " + deck.GPUBackend()
 	return tea.Batch(p.poll(), p.toggleMeter(), p.openRenderer())
 }
@@ -407,7 +407,7 @@ func (p *AppleMusicPage) Update(msg tea.Msg, a *model.App) (model.Page, tea.Cmd)
 			a.AnimateSlow(100 * time.Millisecond)
 		} else if p.level == motion.Full && a.WindowWidth() >= 60 && a.WindowHeight() >= 20 && !p.standbyTickScheduled {
 			p.standbyTickScheduled = true
-			tick := tea.Tick(125*time.Millisecond, func(time.Time) tea.Msg { return appleStandbyTickMsg{} })
+			tick := tea.Tick(80*time.Millisecond, func(time.Time) tea.Msg { return appleStandbyTickMsg{} })
 			if cmd == nil {
 				cmd = tick
 			} else {

@@ -701,11 +701,24 @@ func (s *npScreen) drawDeck(f *deck.Frame, x, y int) {
 }
 
 // drawDeckOverStage composites a 3D frame onto a painted stage backdrop,
-// replacing missed palette-background clusters on silhouette edges with the
-// underlying stage cell's color so warm desk lighting shows no dark halo.
+// smoothly blending Half-block SSAA silhouette edges over the underlying top/bottom
+// stage square pixels so warm desk lighting shows no dark halo.
 func (s *npScreen) drawDeckOverStage(f *deck.Frame, x, y int) {
 	if f == nil {
 		return
+	}
+	unmixBlend := func(fgCol, bgRef, under color.RGBA, hits int) color.RGBA {
+		if hits <= 0 {
+			return under
+		}
+		if hits >= 4 {
+			return fgCol
+		}
+		wMiss := float64(4-hits) * 0.25
+		r := min(max(float64(fgCol.R)+wMiss*(float64(under.R)-float64(bgRef.R)), 0), 255)
+		g := min(max(float64(fgCol.G)+wMiss*(float64(under.G)-float64(bgRef.G)), 0), 255)
+		b := min(max(float64(fgCol.B)+wMiss*(float64(under.B)-float64(bgRef.B)), 0), 255)
+		return color.RGBA{uint8(r + 0.5), uint8(g + 0.5), uint8(b + 0.5), 0xff}
 	}
 	for i := range f.Cells {
 		c := &f.Cells[i]
@@ -719,17 +732,38 @@ func (s *npScreen) drawDeckOverStage(f *deck.Frame, x, y int) {
 		if c.Shadow > 0 && s.shade(cx, cy, c.Shadow) {
 			continue
 		}
-		var under color.RGBA
+		var underTop, underBot color.RGBA
 		var hasUnder bool
 		if ex, ok := s.cellAt(cx, cy); ok && ex.HasBg {
-			under, hasUnder = ex.Bg, true
+			underTop, underBot, hasUnder = ex.Bg, ex.Bg, true
+			if ex.Content == "▀" && ex.HasFg {
+				underTop = ex.Fg
+			} else if ex.Content == "▄" && ex.HasFg {
+				underBot = ex.Fg
+			}
+		}
+		if hasUnder && c.Cov > 0 {
+			topHits := int((c.Cov - 1) / 5)
+			botHits := int((c.Cov - 1) % 5)
+			srcTop, srcBot := c.Bg, c.Bg
+			if c.Ch != " " {
+				srcTop = c.Fg
+			}
+			topOut := unmixBlend(srcTop, s.pal.Bg, underTop, topHits)
+			botOut := unmixBlend(srcBot, s.pal.Bg, underBot, botHits)
+			if topOut == botOut {
+				s.setRGBA(cx, cy, " ", 1, color.RGBA{}, botOut, false, true, false)
+			} else {
+				s.setRGBA(cx, cy, "▀", 1, topOut, botOut, true, true, false)
+			}
+			continue
 		}
 		bg, fg := c.Bg, c.Fg
 		if hasUnder && npNearBg(c.Bg, s.pal.Bg) {
-			bg = under
+			bg = underBot
 		}
 		if hasUnder && npNearBg(c.Fg, s.pal.Bg) {
-			fg = under
+			fg = underTop
 		}
 		hasFg := c.Ch != " "
 		if !hasFg {

@@ -210,28 +210,56 @@ func DrawBezel(s *npScreen, x, y, w, h int, label string, style BezelStyle) {
 	if style == BezelHeavy {
 		top, bottom, left, right = "▀", "▄", "▌", "▐"
 		corners = [4]string{"▛", "▜", "▙", "▟"}
-	}
-	s.repeat(x+1, y, w-2, top, upper)
-	s.repeat(x+1, y+h-1, w-2, bottom, lower)
-	for row := y + 1; row < y+h-1; row++ {
-		s.set(x, row, left, 1, upper)
-		s.set(x+w-1, row, right, 1, lower)
-	}
-	s.set(x, y, corners[0], 1, upper)
-	s.set(x+w-1, y, corners[1], 1, upper)
-	s.set(x, y+h-1, corners[2], 1, lower)
-	s.set(x+w-1, y+h-1, corners[3], 1, lower)
-	if label != "" {
-		s.text(x+2, y, " "+label+" ", uv.Style{Fg: s.pal.Secondary, Bg: s.pal.Bg}, w-4)
-	}
-	if style == BezelHeavy && w >= 6 && h >= 4 {
-		for _, xx := range []int{x + 1, x + w - 2} {
-			for _, yy := range []int{y + 1, y + h - 2} {
-				s.set(xx, yy, "◉", 1, lower)
-			}
+		s.repeat(x+1, y, w-2, top, upper)
+		s.repeat(x+1, y+h-1, w-2, bottom, lower)
+		for row := y + 1; row < y+h-1; row++ {
+			s.set(x, row, left, 1, upper)
+			s.set(x+w-1, row, right, 1, lower)
 		}
-		grille := min(6, max(0, w-npWidth(label)-6))
-		s.repeat(x+w-2-grille, y, grille, "▤", lower)
+		s.set(x, y, corners[0], 1, upper)
+		s.set(x+w-1, y, corners[1], 1, upper)
+		s.set(x, y+h-1, corners[2], 1, lower)
+		s.set(x+w-1, y+h-1, corners[3], 1, lower)
+		if label != "" {
+			s.text(x+2, y, " "+label+" ", uv.Style{Fg: s.pal.Secondary, Bg: s.pal.Bg}, w-4)
+		}
+		if w >= 6 && h >= 4 {
+			for _, xx := range []int{x + 1, x + w - 2} {
+				for _, yy := range []int{y + 1, y + h - 2} {
+					s.set(xx, yy, "◉", 1, lower)
+				}
+			}
+			grille := min(6, max(0, w-npWidth(label)-6))
+			s.repeat(x+w-2-grille, y, grille, "▤", lower)
+		}
+		return
+	}
+	// Cozy stepped pixel-plum bezel with a warm oak shelf edge along the base.
+	edgeCol, _ := npRGBA(s.pal.Rule)
+	outerBg, _ := npRGBA(s.pal.Bg)
+	woodCol := appleCozyWoodLo
+	bracketCol := appleCozyBracket
+	titleFg, _ := npRGBA(s.pal.Text)
+	s.repeatRGBA(x+1, y, max(0, w-2), "▄", appleCozyRaised, outerBg, true, true, false)
+	s.repeatRGBA(x+1, y+h-1, max(0, w-2), "▀", woodCol, outerBg, true, true, false)
+	for row := y + 1; row < y+h-1; row++ {
+		s.setRGBA(x, row, "▐", 1, edgeCol, outerBg, true, true, false)
+		s.setRGBA(x+w-1, row, "▌", 1, edgeCol, outerBg, true, true, false)
+	}
+	s.setRGBA(x, y, "▗", 1, edgeCol, outerBg, true, true, false)
+	s.setRGBA(x+w-1, y, "▖", 1, edgeCol, outerBg, true, true, false)
+	s.setRGBA(x, y+h-1, "▝", 1, woodCol, outerBg, true, true, false)
+	s.setRGBA(x+w-1, y+h-1, "▘", 1, woodCol, outerBg, true, true, false)
+	if label != "" && w > 6 {
+		lw := npWidth(label)
+		if w >= lw+10 {
+			bx := x + max(2, (w-lw-4)/2)
+			bx += s.textRGBA(bx, y, "╭ ", bracketCol, outerBg, true, true, false, 2)
+			bx += s.textRGBA(bx, y, label, titleFg, appleCozyRaised, true, true, true, max(0, w-8))
+			s.textRGBA(bx, y, " ╮", bracketCol, outerBg, true, true, false, 2)
+		} else {
+			s.textRGBA(x+2, y, " "+label+" ", titleFg, appleCozyRaised, true, true, true, w-4)
+		}
 	}
 }
 

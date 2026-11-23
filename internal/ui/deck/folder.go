@@ -172,6 +172,27 @@ func (r *FolderRenderer) traceFolder(v View, pose Pose, sc *folderScene) {
 		var pixels [8]rgb
 		for y := bounds.Min.Y + start; y < bounds.Min.Y+end; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				if v.Tier == Half {
+					var topSum, botSum rgb
+					topHits, botHits := 0, 0
+					for q := range 8 {
+						fx := float64(x) + (float64(q%2)+.5)/2.0
+						fy := (float64(y) + (float64(q/2)+.5)/4.0) * sc.cam.aspect
+						d := vec3{(fx - sc.cam.cx) / sc.cam.focal, (fy - sc.cam.cy) / sc.cam.focal, 1}
+						c, hit := sc.sample(sc.origin, sc.rot.applyT(d).mul(1/sc.scale), d.norm().mul(-1))
+						if hit {
+							if q < 4 {
+								topSum, topHits = topSum.add(c), topHits+1
+							} else {
+								botSum, botHits = botSum.add(c), botHits+1
+							}
+						}
+					}
+					if c := fitHalfMask(topSum, botSum, topHits, botHits); c.Ch != "" {
+						r.frame.Cells[y*w+x] = c
+					}
+					continue
+				}
 				covered := false
 				for q := range gc * gr {
 					fx := float64(x) + (float64(q%gc)+.5)/float64(gc)

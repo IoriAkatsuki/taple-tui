@@ -286,8 +286,14 @@ func (p *AppleMusicPage) sceneBasePose(now time.Time) deck.Pose {
 
 func (p *AppleMusicPage) walkmanPose(now time.Time, z float64) deck.Pose {
 	pose := p.sceneBasePose(now)
+	if !p.inserting && p.swapStart.IsZero() {
+		// Compact tabletop scale (0.80 -> 1.00 on close-up zoom) keeps pixel density
+		// balanced with the left desk companion and leaves cozy breathing room around the lamp.
+		pose.Scale = 0.80 + 0.20*z
+		pose.Y += 2.2 * (1 - z)
+	}
 	if p.level != motion.Off && !p.inserting && p.swapStart.IsZero() {
-		stepMs := int64(125)
+		stepMs := int64(80)
 		if p.state.Playing || p.camera.active(now) || p.sceneMotion.active(now) || p.drawerTween.active(now) || p.panelTween.active(now) || p.rackAnimating(now) || p.seeking(now) || p.reels.Winding(now) {
 			stepMs = 40
 		}
@@ -300,10 +306,10 @@ func (p *AppleMusicPage) walkmanPose(now time.Time, z float64) deck.Pose {
 		if p.state.Playing {
 			scale *= .35
 		}
-		pose.Yaw += (.042*math.Sin(2*math.Pi*t/4.0) + .016*math.Sin(2*math.Pi*t/7.3)) * scale
+		pose.Yaw += (.042*math.Sin(2*math.Pi*t/4.2) + .016*math.Sin(2*math.Pi*t/7.3)) * scale
 		pose.Pitch += (.026*math.Sin(2*math.Pi*t/5.3+1.1) + .010*math.Sin(2*math.Pi*t/3.1)) * scale
 		pose.Roll += .015 * math.Sin(2*math.Pi*t/6.7+.4) * scale
-		pose.Y += .42 * math.Sin(2*math.Pi*t/4.7) * scale
+		pose.Y += .42 * math.Sin(2*math.Pi*t/4.2) * scale
 		if p.level == motion.Full {
 			nx, ny := p.stagePointerOffset()
 			pose.Yaw += -nx * .11

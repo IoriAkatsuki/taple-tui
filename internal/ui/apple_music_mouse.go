@@ -141,40 +141,100 @@ func (p *AppleMusicPage) handleClickKey(key string) tea.Cmd {
 	return nil
 }
 
-func (p *AppleMusicPage) drawKeys(x, y, w int, keys []struct{ key, label string }) {
+func (p *AppleMusicPage) drawKeys(x, y, w int, keys []struct{ key, label string }) int {
+	if len(keys) == 0 || w <= 0 {
+		return 0
+	}
+	// Pick padded (▐ label ▌), compact capped (▐label▌), or uncapped layout across the row
+	// so narrow widths (e.g. w=59 footer) never drop actionable buttons.
+	sumW := 0
 	for _, item := range keys {
-		width := npWidth(item.label)
+		sumW += npWidth(item.label)
+	}
+	paddedNeed := sumW + len(keys)*4 + max(0, len(keys)-1)*2
+	compactCapNeed := sumW + len(keys)*2 + max(0, len(keys)-1)
+	capOverhead, gap, padded := 0, 2, false
+	switch {
+	case paddedNeed <= w:
+		capOverhead, gap, padded = 4, 2, true
+	case compactCapNeed <= w:
+		capOverhead, gap, padded = 2, 1, false
+	}
+
+	var rowBg color.RGBA
+	hasRowBg := false
+	if c, ok := p.screen.cellAt(x, y); ok && c.HasBg {
+		rowBg, hasRowBg = c.Bg, true
+	}
+	startX := x
+	for _, item := range keys {
+		width := npWidth(item.label) + capOverhead
 		if width > w {
 			break
 		}
 		hovered := p.hoverX >= x && p.hoverX < x+width && p.hoverY == y
 		active := (len(item.key) == 1 && item.key[0] >= '1' && item.key[0] <= '3' && int(p.drawer) == int(item.key[0]-'1')) ||
 			(item.key == "i" && p.scene == appleListen) || (item.key == "z" && p.zoomed)
-		badgeBg := color.RGBA{0x2b, 0x24, 0x35, 0xff}
-		badgeFg := appleNeon.Text
-		labelFg := appleNeon.Secondary
-		labelBg := color.RGBA{}
-		hasLabelBg := false
+		capCol := appleNeon.Rule
+		pillBg := color.RGBA{0x22, 0x1c, 0x30, 0xff}
+		keyFg := appleNeon.Accent2
+		labelFg := appleNeon.Text
+		labelBold := false
+		switch item.key {
+		case "space", "/":
+			capCol = appleNeon.Hero
+			pillBg = appleCozyPill
+			keyFg = appleNeon.Hero
+			labelBold = true
+		case "b", "B", "y":
+			capCol = appleNeon.Accent2
+			pillBg = appleCozyPill
+			keyFg = appleNeon.Accent2
+			labelBold = true
+		}
+		if capOverhead == 0 {
+			labelFg = appleNeon.Secondary
+		}
 		if active {
-			badgeFg = appleNeon.Bg
-			badgeBg = appleNeon.Accent
+			capCol = appleNeon.Hero
+			pillBg = color.RGBA{0x31, 0x25, 0x42, 0xff}
+			keyFg = appleNeon.Hero
 			labelFg = appleNeon.Text
+			labelBold = true
 		}
 		if hovered {
-			badgeFg = appleNeon.Bg
-			badgeBg = appleNeon.Hero
-			labelFg, labelBg, hasLabelBg = appleNeon.Hero, appleNeon.Surface, true
+			capCol = appleNeon.Accent2
+			pillBg = appleCozyPillHover
+			keyFg = appleNeon.Accent2
+			labelFg = appleNeon.Text
+			labelBold = true
+		}
+
+		bodyX, bodyW := x, width
+		if capOverhead > 0 {
+			p.screen.setRGBA(x, y, "▐", 1, capCol, rowBg, true, hasRowBg, false)
+			p.screen.setRGBA(x+width-1, y, "▌", 1, capCol, rowBg, true, hasRowBg, false)
+			bodyX, bodyW = x+1, width-2
+			p.screen.fillRGBA(bodyX, y, bodyW, 1, pillBg)
+			if padded {
+				bodyX++
+				bodyW -= 2
+			}
+		} else {
+			p.screen.fillRGBA(bodyX, y, bodyW, 1, pillBg)
 		}
 		if idx := strings.IndexByte(item.label, ' '); idx > 0 {
-			kw := p.screen.textRGBA(x, y, item.label[:idx], badgeFg, badgeBg, true, true, true, width)
-			p.screen.textRGBA(x+kw, y, item.label[idx:], labelFg, labelBg, true, hasLabelBg, active, max(0, width-kw))
+			kw := p.screen.textRGBA(bodyX, y, item.label[:idx], keyFg, pillBg, true, true, true, bodyW)
+			p.screen.textRGBA(bodyX+kw, y, item.label[idx:], labelFg, pillBg, true, true, labelBold, max(0, bodyW-kw))
 		} else {
-			p.screen.textRGBA(x, y, item.label, badgeFg, badgeBg, true, true, true, width)
+			p.screen.textRGBA(bodyX, y, item.label, appleNeon.Text, pillBg, true, true, true, bodyW)
 		}
 		p.addHit(appleHit{kind: appleHitKey, x: x, y: y, w: width, h: 1, key: item.key})
-		x += width + 2
-		w -= width + 2
+		step := width + gap
+		x += step
+		w -= step
 	}
+	return x - startX
 }
 
 func (p *AppleMusicPage) stagePointerOffset() (float64, float64) {

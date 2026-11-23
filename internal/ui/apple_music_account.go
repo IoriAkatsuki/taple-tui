@@ -62,7 +62,7 @@ func (p *AppleMusicPage) confirmLogout() tea.Cmd {
 
 func (p *AppleMusicPage) drawLogoutPanel() {
 	if p.screen.w < 40 || p.screen.h < 12 {
-		p.screen.fill(0, 0, p.screen.w, p.screen.h, appleNeon.Surface)
+		p.screen.fillRGBA(0, 0, p.screen.w, p.screen.h, appleCozyCard)
 		p.screen.text(0, 0, T("account.clear_title"), uv.Style{Fg: appleNeon.Accent2}, p.screen.w)
 		p.screen.text(0, 1, T("account.resize"), uv.Style{Fg: appleNeon.Text}, p.screen.w)
 		if !p.loggingOut {
@@ -72,7 +72,7 @@ func (p *AppleMusicPage) drawLogoutPanel() {
 	}
 	w, h := min(p.screen.w-4, 66), min(p.screen.h-2, 13)
 	x, y := (p.screen.w-w)/2, (p.screen.h-h)/2
-	p.screen.fill(x, y, w, h, appleNeon.Surface)
+	p.screen.fillRGBA(x, y, w, h, appleCozyCard)
 	appleBezel(&p.screen, x, y, w, h, T("account.clear_title"))
 	body := T("account.clear_body")
 	if p.loggingOut {

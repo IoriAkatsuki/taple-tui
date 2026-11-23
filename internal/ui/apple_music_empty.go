@@ -254,16 +254,23 @@ func (p *AppleMusicPage) drawCozyEmptyCard(x, y, w, rows int, now time.Time, spe
 		}
 	}
 
-	cardBg := npLerpRGBA(appleNeon.Bg, color.RGBA{0x16, 0x13, 0x1f, 0xff}, reveal)
+	cardBg := npLerpRGBA(appleNeon.Bg, appleCozyCard, reveal)
 	p.screen.fillRGBA(cx, cy, cw, ch, cardBg)
+	if cw >= artW+2 && ch >= artH {
+		railCol := npLerpRGBA(appleNeon.Bg, appleNeon.Ghost, reveal)
+		for ry := artY; ry < artY+artH; ry++ {
+			p.screen.setRGBA(artX-1, ry, "▐", 1, railCol, cardBg, true, true, false)
+			p.screen.setRGBA(artX+artW, ry, "▌", 1, railCol, cardBg, true, true, false)
+		}
+	}
 
 	if showBubble {
 		bubbleText := p.emptyBubbleText(spec.mood, perkUp)
 		innerMax := max(0, cw-8)
 		textW := min(npWidth(bubbleText), innerMax)
 		bx := cx + max(0, (cw-(textW+4))/2)
-		bubBg := npLerpRGBA(appleNeon.Bg, color.RGBA{0x24, 0x1e, 0x2d, 0xff}, reveal)
-		edgeCol := npLerpRGBA(appleNeon.Bg, appleNeon.Rule, reveal)
+		bubBg := npLerpRGBA(appleNeon.Bg, appleCozyRaised, reveal)
+		edgeCol := npLerpRGBA(appleNeon.Bg, appleCozyBracket, reveal)
 		if perkUp {
 			edgeCol = npLerpRGBA(appleNeon.Bg, appleNeon.Accent2, reveal)
 		}
@@ -293,14 +300,14 @@ func (p *AppleMusicPage) drawCozyEmptyCard(x, y, w, rows int, now time.Time, spe
 		for i := range pillCount {
 			pl := pillLayouts[i]
 			hovered := p.hoverY == pillY && p.hoverX >= pl.x && p.hoverX < pl.x+pl.w
-			pillBg := color.RGBA{0x27, 0x21, 0x33, 0xff}
+			pillBg := appleCozyPill
 			capCol := appleNeon.Accent2
 			txtCol := appleNeon.Text
 			if i == 0 {
 				capCol = appleNeon.Hero
 			}
 			if hovered {
-				pillBg = color.RGBA{0x36, 0x2a, 0x3d, 0xff}
+				pillBg = appleCozyPillHover
 				capCol = appleNeon.Accent
 			}
 			pillBg = npLerpRGBA(appleNeon.Bg, pillBg, reveal)
@@ -337,13 +344,12 @@ func (p *AppleMusicPage) emptyBubbleText(mood appleEmptyMood, perkUp bool) strin
 }
 
 func drawCenteredEmptyLine(s *npScreen, cx, cw int, y int, label string, fg, bg color.RGBA, bold bool) {
-	if cw <= 2 || y < 0 || y >= s.h {
+	if cw <= 0 || y < 0 || y >= s.h {
 		return
 	}
-	maxW := cw - 2
-	lw := min(npWidth(label), maxW)
-	tx := cx + 1 + max(0, (maxW-lw)/2)
-	s.textRGBA(tx, y, label, fg, bg, true, true, bold, maxW)
+	lw := min(npWidth(label), cw)
+	tx := cx + max(0, (cw-lw)/2)
+	s.textRGBA(tx, y, label, fg, bg, true, true, bold, cw)
 }
 
 func (p *AppleMusicPage) drawEmptyArtboard(ax, ay, aw, ah int, phase float64, mood appleEmptyMood, perkUp bool, reveal float64) {
@@ -388,12 +394,12 @@ func (p *AppleMusicPage) drawEmptyArtboard(ax, ay, aw, ah int, phase float64, mo
 	}
 
 	// Stack-only palette keeps subpixel rasterization allocation-free.
-	colCard := color.RGBA{0x16, 0x13, 0x1f, 0xff}
-	colSlate := color.RGBA{0x1a, 0x17, 0x26, 0xff}
-	colFrame := color.RGBA{0x31, 0x28, 0x3b, 0xff}
-	colDesk := color.RGBA{0xb5, 0x84, 0x5b, 0xff}
+	colCard := appleCozyCard
+	colSlate := color.RGBA{0x1c, 0x17, 0x28, 0xff}
+	colFrame := appleNeon.Rule
+	colDesk := appleCozyWoodHi
 	colDeskHi := color.RGBA{0xd6, 0xa3, 0x74, 0xff}
-	colDeskShadow := color.RGBA{0x10, 0x0e, 0x17, 0xff}
+	colDeskShadow := appleNeon.Bg
 	colLamp := color.RGBA{0xe8, 0x92, 0x4c, 0xff}
 	colLampArm := color.RGBA{0x9c, 0x7a, 0x5e, 0xff}
 	colBulb := color.RGBA{0xff, 0xf2, 0xac, 0xff}
@@ -403,19 +409,19 @@ func (p *AppleMusicPage) drawEmptyArtboard(ax, ay, aw, ah int, phase float64, mo
 	colMug := color.RGBA{0xd9, 0x7b, 0x59, 0xff}
 	colMugRim := color.RGBA{0xf6, 0xdf, 0xc7, 0xff}
 	colSteam := color.RGBA{0xd9, 0xbe, 0xa5, 0xff}
-	colBotBody := color.RGBA{0xf5, 0xe8, 0xd6, 0xff}
+	colBotBody := appleNeon.Text
 	colBotShade := color.RGBA{0xd9, 0xc5, 0xae, 0xff}
 	colBotOutline := color.RGBA{0x63, 0x4a, 0x37, 0xff}
 	colBotScreen := color.RGBA{0x22, 0x19, 0x22, 0xff}
 	colCheek := color.RGBA{0xff, 0x8f, 0x7a, 0xff}
 	colEyeAmber := color.RGBA{0xff, 0xd4, 0x7a, 0xff}
-	colEyeCyan := color.RGBA{0x2e, 0xd8, 0xc6, 0xff}
+	colEyeCyan := appleNeon.Accent
 	colEyeWhite := color.RGBA{0xff, 0xfd, 0xf5, 0xff}
-	colScarf := color.RGBA{0xff, 0x6b, 0x4a, 0xff}
+	colScarf := appleNeon.Hero
 	colSlotWell := color.RGBA{0x2a, 0x20, 0x2b, 0xff}
-	colSlotGold := color.RGBA{0xf5, 0xb9, 0x42, 0xff}
+	colSlotGold := appleNeon.Accent2
 	colAntIdle := color.RGBA{0xb6, 0x8f, 0x6c, 0xff}
-	colAntLit := color.RGBA{0xff, 0xc4, 0x56, 0xff}
+	colAntLit := appleNeon.Accent2
 
 	samplePixel := func(px, py int) color.RGBA {
 		cx := float64(px) + 0.5

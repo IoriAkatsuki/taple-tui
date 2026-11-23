@@ -137,9 +137,13 @@ func (r *WalkmanRenderer) RenderWalkman(v View, pal Palette, pose Pose, st Walkm
 	o := rot.applyT(vec3{pose.X, pose.Y, camDist}.mul(-1)).mul(1 / scale)
 	m := cassetteMaterials(pal, st.State.Style, st.TrackNum)
 	gc, gr := v.Tier.Grid()
+	scols, srows := gc, gr
+	if v.Tier == Half {
+		scols, srows = 2, 4
+	}
 	position, cassetteScale := walkmanCassettePlacement(cam, pose, st)
 	center := rot.apply(position.mul(scale))
-	detail := cam.k * scale * cassetteScale * camDist / (camDist + center.z) * float64(gr) / cam.aspect
+	detail := cam.k * scale * cassetteScale * camDist / (camDist + center.z) * float64(srows) / cam.aspect
 	sc := walkmanScene{st: st, position: position, scale: cassetteScale, bodyRot: rot,
 		cassette: scene{m: &m, rot: cassetteRot, radii: st.Radii, angles: st.Angles, blur: st.Blur, lObj: cassetteRot.applyT(keyLight), detail: detail}}
 	if st.StorageCover > 0 {
@@ -173,18 +177,24 @@ func (r *WalkmanRenderer) RenderWalkman(v View, pal Palette, pose Pose, st Walkm
 	}
 	parallel(bounds.Dy(), func(start, end int) {
 		var pixels [8]rgb
+		var hits [8]bool
 		for y := bounds.Min.Y + start; y < bounds.Min.Y+end; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				covered := false
-				for q := range gc * gr {
-					fx, fy := float64(x)+(float64(q%gc)+.5)/float64(gc), (float64(y)+(float64(q/gc)+.5)/float64(gr))*cam.aspect
+				for q := range scols * srows {
+					fx, fy := float64(x)+(float64(q%scols)+.5)/float64(scols), (float64(y)+(float64(q/scols)+.5)/float64(srows))*cam.aspect
 					d := vec3{(fx - cam.cx) / cam.focal, (fy - cam.cy) / cam.focal, 1}
 					c, _, hit := sc.sample(o, rot.applyT(d).mul(1/scale), d.norm().mul(-1))
 					covered = covered || hit
 					pixels[q] = c
+					hits[q] = hit
 				}
 				if covered {
-					r.frame.Cells[y*w+x] = fitCell(pixels[:gc*gr], v.Tier)
+					if v.Tier == Half {
+						r.frame.Cells[y*w+x] = fitHalfAA(pixels[:], hits)
+					} else {
+						r.frame.Cells[y*w+x] = fitCell(pixels[:gc*gr], v.Tier)
+					}
 				}
 			}
 		}

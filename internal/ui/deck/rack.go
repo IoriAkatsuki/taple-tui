@@ -251,25 +251,36 @@ func (r *RackRenderer) RenderRack(v View, pal Palette, st RackState) *Frame {
 	sc := rackScene{w: float64(w), rows: float64(h), st: st, aspect: v.Aspect,
 		tab: rgbOf(st.TabColor), flash: rgbOf(pal.Hero)}
 	sc.colors = [7]rgb{
-		rackBack:   {18, 15, 22},
-		rackRail:   {88, 62, 44},
-		rackLip:    {124, 90, 58},
-		rackSpine:  {48, 38, 46},
-		rackLabel:  {34, 28, 36},
-		rackTabMat: {68, 52, 56},
-		rackMouth:  {12, 10, 16},
+		rackBack:   {22, 18, 32},
+		rackRail:   {136, 96, 64},
+		rackLip:    {174, 126, 84},
+		rackSpine:  {54, 44, 66},
+		rackLabel:  {36, 29, 46},
+		rackTabMat: {78, 62, 86},
+		rackMouth:  {15, 12, 22},
 	}
 	gc, gr := v.Tier.Grid()
+	scols, srows := gc, gr
+	if v.Tier == Half {
+		scols, srows = 2, 4
+	}
 	parallel(hi-lo, func(start, end int) {
 		var pixels [8]rgb
 		for y := lo + start; y < lo+end; y++ {
 			for x := range w {
-				for q := range gc * gr {
-					fx := float64(x) + (float64(q%gc)+.5)/float64(gc)
-					fy := float64(y) + (float64(q/gc)+.5)/float64(gr)
+				for q := range scols * srows {
+					fx := float64(x) + (float64(q%scols)+.5)/float64(scols)
+					fy := float64(y) + (float64(q/scols)+.5)/float64(srows)
 					pixels[q] = sc.shade(fx, fy)
 				}
-				r.frame.Cells[y*w+x] = fitCell(pixels[:gc*gr], v.Tier)
+				if v.Tier == Half {
+					top := pixels[0].add(pixels[1]).add(pixels[2]).add(pixels[3]).scale(0.25)
+					bot := pixels[4].add(pixels[5]).add(pixels[6]).add(pixels[7]).scale(0.25)
+					pixels[0], pixels[1] = top, bot
+					r.frame.Cells[y*w+x] = fitCell(pixels[:2], Half)
+				} else {
+					r.frame.Cells[y*w+x] = fitCell(pixels[:gc*gr], v.Tier)
+				}
 			}
 		}
 	})

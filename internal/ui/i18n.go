@@ -37,11 +37,11 @@ var i18nCatalog = map[string]i18nEntry{
 	"nav.queue":         {"3 Queue", "3 队列"},
 	"nav.browse_listen": {"i Browse/Listen", "i 浏览/聆听"},
 	"nav.settings":      {"s Settings", "s 设置"},
-	"drawer.search":     {"SEARCH / CASSETTE RACK", "搜索 / 磁带抽屉"},
-	"drawer.library":    {"MY LIBRARY", "我的资料库"},
-	"drawer.queue":      {"QUEUE · %d TRACKS", "队列 · %d 首"},
-	"bezel.now_playing": {"NOW PLAYING · i DETAIL", "NOW PLAYING · i 详情"},
-	"bezel.listening":   {"LISTENING · DETAIL", "LISTENING · DETAIL"},
+	"drawer.search":     {"Search · Cassette Shelf", "搜索 · 磁带木架"},
+	"drawer.library":    {"My Library", "我的资料库"},
+	"drawer.queue":      {"Queue · %d Tracks", "队列 · %d 首"},
+	"bezel.now_playing": {"Now Playing · i Detail", "正在播放 · i 详情"},
+	"bezel.listening":   {"Listening · Detail", "聆听 · 曲目详情"},
 
 	// Catalog Categories
 	"cat.songs":           {"4 Songs", "4 歌曲"},
